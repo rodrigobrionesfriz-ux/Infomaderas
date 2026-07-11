@@ -174,6 +174,50 @@ body {
   min-width: 160px;
 }
 .filter-group select:focus { outline: none; border-color: var(--accent2); }
+
+/* ── COMBOBOX CON BUSCADOR (Proveedor / Centro Costo) ── */
+.combo { position: relative; }
+.combo-input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text);
+  padding: 8px 26px 8px 11px;
+  font-family: 'Sora', sans-serif;
+  font-size: 0.82rem;
+  cursor: text;
+}
+.combo-input:focus { outline: none; border-color: var(--accent2); }
+.combo-input::placeholder { color: var(--muted); }
+.combo.selected .combo-input { border-color: var(--accent2); font-weight: 600; }
+.combo-clear {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer;
+  display: none; padding: 0 2px;
+}
+.combo-clear:hover { color: var(--red); }
+.combo.selected .combo-clear { display: block; }
+.combo-list {
+  display: none;
+  position: absolute; top: calc(100% + 4px); left: 0;
+  min-width: 100%; width: max-content; max-width: 380px;
+  max-height: 260px; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); z-index: 500;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+}
+.combo-list.open { display: block; }
+.combo-opt {
+  padding: 8px 12px; font-size: 0.8rem; color: var(--text);
+  cursor: pointer; white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+.combo-opt:last-child { border-bottom: none; }
+.combo-opt:hover, .combo-opt.active { background: var(--surface2); color: var(--accent2); }
+.combo-opt.empty { color: var(--muted); cursor: default; font-style: italic; }
+.combo-opt.empty:hover { background: transparent; color: var(--muted); }
+.combo-opt mark { background: transparent; color: var(--accent); font-weight: 700; }
 .filter-reset {
   background: transparent;
   border: 1px solid var(--border);
@@ -245,6 +289,51 @@ body {
   color: var(--muted);
 }
 .kpi-sub b { color: var(--text); }
+
+/* ── GRILLA DE PRECIO POR ESPECIE × UNIDAD ── */
+.precio-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 6px;
+  margin: 6px 0 8px;
+}
+.precio-cell {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--muted);
+  border-radius: 6px;
+  padding: 7px 9px;
+}
+.precio-cell.euca { border-left-color: var(--madera); }
+.precio-cell.pino { border-left-color: var(--amber); }
+.precio-cell.otro { border-left-color: var(--muted); }
+.precio-esp {
+  font-size: 0.62rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 700;
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.precio-esp .um {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  color: var(--accent2);
+}
+.precio-val {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.precio-meta { font-size: 0.62rem; color: var(--muted); margin-top: 1px; }
+.precio-vacio { color: var(--muted); font-size: 0.78rem; padding: 8px 2px; font-style: italic; }
 
 /* ── CHARTS GRID ── */
 .charts-grid {
@@ -549,11 +638,21 @@ footer {
     </div>
     <div class="filter-group">
       <label>Proveedor</label>
-      <select id="f-proveedor"><option value="">Todos</option></select>
+      <div class="combo" id="combo-proveedor">
+        <input type="text" class="combo-input" id="ci-proveedor" placeholder="Todos" autocomplete="off">
+        <input type="hidden" id="f-proveedor" value="">
+        <span class="combo-clear" id="cx-proveedor" title="Limpiar">&times;</span>
+        <div class="combo-list" id="cl-proveedor"></div>
+      </div>
     </div>
     <div class="filter-group">
       <label>Centro Costo</label>
-      <select id="f-cc"><option value="">Todos</option></select>
+      <div class="combo" id="combo-cc">
+        <input type="text" class="combo-input" id="ci-cc" placeholder="Todos" autocomplete="off">
+        <input type="hidden" id="f-cc" value="">
+        <span class="combo-clear" id="cx-cc" title="Limpiar">&times;</span>
+        <div class="combo-list" id="cl-cc"></div>
+      </div>
     </div>
     <button class="filter-reset" id="btnReset">&#x21BA; Limpiar</button>
     <div class="filter-count">Mostrando <span id="filteredCount">0</span> guías</div>
@@ -596,10 +695,15 @@ footer {
       <div class="kpi-value" id="kpi-flete">0</div>
       <div class="kpi-sub" id="kpi-flete-sub">faenas activas</div>
     </div>
-    <div class="kpi teal">
-      <div class="kpi-label">Precio Unitario Promedio</div>
-      <div class="kpi-value" id="kpi-prom">$0</div>
-      <div class="kpi-sub">por m³ ponderado</div>
+    <div class="kpi teal" id="kpi-card-prom" style="grid-column:span 2;">
+      <div class="kpi-label">Precio Unitario Promedio — Madera</div>
+      <div class="precio-grid" id="precio-grid"></div>
+      <div class="kpi-sub" id="kpi-prom-sub">ponderado por volumen · solo TIPO = MADERA</div>
+    </div>
+    <div class="kpi" style="border-top:0;border-left:2px solid #79c0ff;">
+      <div class="kpi-label" style="color:#79c0ff;">Promedio Diario Recepción</div>
+      <div class="kpi-value" id="kpi-prom-dia">0</div>
+      <div class="kpi-sub" id="kpi-prom-dia-sub">— días efectivos</div>
     </div>
   </div>
 
@@ -707,6 +811,17 @@ let unitFilter  = '';  // '' | 'm3' | 'mr'
 // Clasificadores de unidad — globales para uso en KPIs, gráficos y tabla
 const esM3 = r => r.UM === 'm3';
 const esMR = r => r.UM !== 'm3';
+
+// ── DETECCIÓN DE ESPECIE ──
+// La especie no viene como campo propio: se infiere de DESCRIPCIÓN / PRODUCTO.
+// Ej: "MR EUCA GLOB 3,50 C/C", "EUCALYPTUS NITENS 3.50", "PINO PULPABLE 2.44"
+function especieDe(r) {
+  const t = ((r['DESCRIPCIÓN'] || '') + ' ' + (r.PRODUCTO || '') + ' ' + (r.CONCEPTO || '')).toUpperCase();
+  if (/\bPINO\b|PINUS|\bRADIATA\b/.test(t)) return 'Pino';
+  if (/EUCA|NITENS|GLOBULUS/.test(t))       return 'Eucalyptus';
+  return 'Otros';
+}
+const ESPECIE_CLASE = { 'Eucalyptus': 'euca', 'Pino': 'pino', 'Otros': 'otro' };
 
 // ── HUELLA ÚNICA PARA DEDUPLICACIÓN ──
 // Identifica una guía de forma única. Dos filas con la misma huella se
@@ -859,9 +974,145 @@ function populateFilters(data) {
 
   fill('f-planta',   plantas, 'Todas');
   fill('f-bodega',   bodegas, 'Todas');
-  fill('f-proveedor', provs,  'Todos');
-  fill('f-cc',       ccs,     'Todos');
+  // Proveedor y Centro de Costo usan combobox con buscador dinámico
+  setComboOptions('proveedor', provs);
+  setComboOptions('cc',        ccs);
 }
+
+// ── COMBOBOX CON BUSCADOR DINÁMICO ──
+const COMBOS = {};  // { proveedor: {opciones:[...]}, cc: {...} }
+
+function setComboOptions(name, opciones) {
+  COMBOS[name] = COMBOS[name] || {};
+  COMBOS[name].opciones = opciones;
+  const hidden = document.getElementById('f-' + name);
+  const input  = document.getElementById('ci-' + name);
+  // Si el valor seleccionado ya no existe en los datos, se limpia
+  if (hidden.value && !opciones.includes(hidden.value)) {
+    hidden.value = '';
+    input.value = '';
+  }
+  syncComboUI(name);
+}
+
+function syncComboUI(name) {
+  const wrap   = document.getElementById('combo-' + name);
+  const hidden = document.getElementById('f-' + name);
+  const input  = document.getElementById('ci-' + name);
+  if (hidden.value) {
+    wrap.classList.add('selected');
+    input.value = hidden.value;
+  } else {
+    wrap.classList.remove('selected');
+    input.value = '';
+  }
+}
+
+function escHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+// Resalta el término buscado dentro de la opción
+function marcar(texto, q) {
+  if (!q) return escHtml(texto);
+  const i = texto.toLowerCase().indexOf(q.toLowerCase());
+  if (i < 0) return escHtml(texto);
+  return escHtml(texto.slice(0,i)) + '<mark>' + escHtml(texto.slice(i, i+q.length)) + '</mark>' + escHtml(texto.slice(i+q.length));
+}
+
+function renderComboList(name, query) {
+  const list = document.getElementById('cl-' + name);
+  const opciones = (COMBOS[name] && COMBOS[name].opciones) || [];
+  const q = (query || '').trim().toLowerCase();
+  const matches = q ? opciones.filter(o => String(o).toLowerCase().includes(q)) : opciones;
+
+  let html = `<div class="combo-opt" data-val="">${name==='cc' ? 'Todos' : 'Todos'}</div>`;
+  if (matches.length === 0) {
+    html += '<div class="combo-opt empty">Sin coincidencias</div>';
+  } else {
+    matches.slice(0, 300).forEach(o => {
+      html += `<div class="combo-opt" data-val="${escHtml(o)}">${marcar(String(o), q)}</div>`;
+    });
+  }
+  list.innerHTML = html;
+  list.classList.add('open');
+
+  list.querySelectorAll('.combo-opt[data-val]').forEach(el => {
+    el.addEventListener('mousedown', e => {   // mousedown: se dispara antes del blur
+      e.preventDefault();
+      elegirCombo(name, el.getAttribute('data-val'));
+    });
+  });
+}
+
+function elegirCombo(name, val) {
+  document.getElementById('f-' + name).value = val || '';
+  cerrarCombo(name);
+  syncComboUI(name);
+  applyFilters();
+}
+
+function cerrarCombo(name) {
+  const list = document.getElementById('cl-' + name);
+  if (list) list.classList.remove('open');
+}
+
+function initCombo(name) {
+  const input  = document.getElementById('ci-' + name);
+  const clear  = document.getElementById('cx-' + name);
+  const hidden = document.getElementById('f-' + name);
+
+  // Al enfocar: abre la lista completa y deja escribir para filtrar
+  input.addEventListener('focus', () => { input.value = ''; renderComboList(name, ''); });
+  input.addEventListener('input', () => renderComboList(name, input.value));
+
+  input.addEventListener('keydown', e => {
+    const list = document.getElementById('cl-' + name);
+    const opts = [...list.querySelectorAll('.combo-opt[data-val]')];
+    let idx = opts.findIndex(o => o.classList.contains('active'));
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!list.classList.contains('open')) renderComboList(name, input.value);
+      idx = Math.min(idx + 1, opts.length - 1);
+      opts.forEach(o => o.classList.remove('active'));
+      if (opts[idx]) { opts[idx].classList.add('active'); opts[idx].scrollIntoView({block:'nearest'}); }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      idx = Math.max(idx - 1, 0);
+      opts.forEach(o => o.classList.remove('active'));
+      if (opts[idx]) { opts[idx].classList.add('active'); opts[idx].scrollIntoView({block:'nearest'}); }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const sel = opts[idx >= 0 ? idx : 0];
+      if (sel) elegirCombo(name, sel.getAttribute('data-val'));
+    } else if (e.key === 'Escape') {
+      cerrarCombo(name); input.blur();
+    }
+  });
+
+  // Al salir sin elegir: restaura lo que estaba seleccionado
+  input.addEventListener('blur', () => {
+    setTimeout(() => { cerrarCombo(name); syncComboUI(name); }, 120);
+  });
+
+  clear.addEventListener('click', e => {
+    e.stopPropagation();
+    hidden.value = '';
+    syncComboUI(name);
+    applyFilters();
+  });
+}
+
+initCombo('proveedor');
+initCombo('cc');
+
+// Cierra los combos al hacer clic fuera
+document.addEventListener('click', e => {
+  ['proveedor','cc'].forEach(n => {
+    const wrap = document.getElementById('combo-' + n);
+    if (wrap && !wrap.contains(e.target)) cerrarCombo(n);
+  });
+});
 
 function getFilters() {
   return {
@@ -889,9 +1140,12 @@ function applyFilters() {
 
 document.getElementById('btnReset').addEventListener('click', () => {
   ['f-mes','f-planta','f-bodega','f-proveedor','f-cc'].forEach(id => document.getElementById(id).value='');
+  syncComboUI('proveedor');
+  syncComboUI('cc');
   applyFilters();
 });
-['f-mes','f-planta','f-bodega','f-proveedor','f-cc'].forEach(id =>
+// Los selects normales disparan change; proveedor y CC se manejan vía combobox
+['f-mes','f-planta','f-bodega'].forEach(id =>
   document.getElementById(id).addEventListener('change', applyFilters)
 );
 document.getElementById('tableSearch').addEventListener('input', e => {
@@ -1135,7 +1389,77 @@ function renderKPIs() {
   const montoBonosTotal = d.reduce((s,r)=>s+((r.BONOS||0)*(r.CANTIDAD||0)),0);
   document.getElementById('kpi-bonos').textContent = fmtCLP(montoBonosTotal);
   document.getElementById('kpi-bonos-sub').textContent = 'total bonificación';
-  document.getElementById('kpi-prom').textContent   = fmtCLP(prom);
+  // ── PRECIO UNITARIO PROMEDIO POR ESPECIE × UNIDAD ──
+  // Ponderado por volumen (neto total / cantidad total), no promedio simple.
+  // Solo TIPO = MADERA: incluir FLETE mezclaría dos precios distintos
+  // y distorsionaría el valor real de compra de la madera.
+  const soloMadera = d.filter(r => String(r.TIPO || '').toUpperCase() === 'MADERA');
+  const grupos = {};
+  soloMadera.forEach(r => {
+    const esp = especieDe(r);
+    const um  = esM3(r) ? 'm³' : 'MR';
+    const k   = esp + '|' + um;
+    if (!grupos[k]) grupos[k] = { esp, um, neto: 0, cant: 0, guias: 0 };
+    grupos[k].neto += (r.NETO || 0);
+    grupos[k].cant += (r.CANTIDAD || 0);
+    grupos[k].guias++;
+  });
+
+  const orden = { 'Eucalyptus': 0, 'Pino': 1, 'Otros': 2 };
+  const celdas = Object.values(grupos)
+    .filter(g => g.cant > 0)
+    .sort((a,b) => (orden[a.esp] - orden[b.esp]) || (a.um < b.um ? -1 : 1));
+
+  const grid = document.getElementById('precio-grid');
+  if (celdas.length === 0) {
+    grid.innerHTML = '<div class="precio-vacio">Sin registros de madera para este filtro</div>';
+  } else {
+    grid.innerHTML = celdas.map(g => {
+      const precio = g.neto / g.cant;
+      return `<div class="precio-cell ${ESPECIE_CLASE[g.esp] || 'otro'}">
+        <div class="precio-esp"><span>${g.esp}</span><span class="um">${g.um}</span></div>
+        <div class="precio-val">${fmtCLP(precio)}</div>
+        <div class="precio-meta">${fmtNum(g.cant,1)} ${g.um} · ${g.guias} guías</div>
+      </div>`;
+    }).join('');
+  }
+
+  const volMaderaTot = soloMadera.reduce((s,r)=>s+(r.CANTIDAD||0),0);
+  const netoMaderaTot = soloMadera.reduce((s,r)=>s+(r.NETO||0),0);
+  const promGlobal = volMaderaTot > 0 ? netoMaderaTot / volMaderaTot : 0;
+  document.getElementById('kpi-prom-sub').innerHTML =
+    celdas.length
+      ? `Global: <b>${fmtCLP(promGlobal)}</b> · ponderado por volumen · solo TIPO = MADERA`
+      : 'ponderado por volumen · solo TIPO = MADERA';
+
+  // ── PROMEDIO DIARIO CON RECEPCIONES EFECTIVAS ──
+  // Un "día efectivo" es un día en que realmente hubo recepción de esa unidad
+  // (cantidad > 0). Los días sin movimiento NO diluyen el promedio.
+  const diasM3 = new Set();
+  const diasMR = new Set();
+  d.forEach(r => {
+    const dia = r.FECHA_STR;
+    const cant = r.CANTIDAD || 0;
+    if (!dia || cant <= 0) return;
+    if (esM3(r)) diasM3.add(dia); else diasMR.add(dia);
+  });
+  const promDiaM3 = diasM3.size > 0 ? volM3 / diasM3.size : 0;
+  const promDiaMR = diasMR.size > 0 ? volMR / diasMR.size : 0;
+  const diasTotales = new Set([...diasM3, ...diasMR]).size;
+
+  const elPD    = document.getElementById('kpi-prom-dia');
+  const elPDsub = document.getElementById('kpi-prom-dia-sub');
+  const partes = [];
+  if (diasM3.size) partes.push(fmtNum(promDiaM3, 2) + ' m³/día');
+  if (diasMR.size) partes.push(fmtNum(promDiaMR, 2) + ' MR/día');
+  elPD.innerHTML = partes.length
+    ? partes.map(p => `<div style="line-height:1.25;">${p}</div>`).join('')
+    : '0';
+  elPD.style.fontSize = partes.length > 1 ? '1.25rem' : '';
+  elPDsub.innerHTML = diasTotales
+    ? `<b>${diasTotales}</b> días con recepción efectiva`
+    : 'sin recepciones';
+
   document.getElementById('filteredCount').textContent = d.length;
 }
 
@@ -1344,6 +1668,8 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
       filtered = [...allData];
       ['f-mes','f-planta','f-bodega','f-proveedor','f-cc'].forEach(id => document.getElementById(id).value='');
       populateFilters(allData);
+      syncComboUI('proveedor');
+      syncComboUI('cc');
       page = 1;
       render();
 
