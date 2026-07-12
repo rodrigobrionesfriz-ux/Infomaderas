@@ -676,9 +676,9 @@ footer {
       <div class="kpi-sub" id="kpi-bonos-sub">total bonificación</div>
     </div>
     <div class="kpi" style="border-top:0;border-left:2px solid #79c0ff;">
-      <div class="kpi-label" style="color:#79c0ff;">Neto Flete</div>
+      <div class="kpi-label" style="color:#79c0ff;">Costo Fletes</div>
       <div class="kpi-value" id="kpi-neto-flete">$0</div>
-      <div class="kpi-sub" id="kpi-neto-flete-sub">— guías de flete</div>
+      <div class="kpi-sub" id="kpi-neto-flete-sub">— guías · transporte a planta</div>
     </div>
     <div class="kpi blue">
       <div class="kpi-label">Volumen m³</div>
@@ -701,9 +701,9 @@ footer {
       <div class="kpi-sub" id="kpi-flete-sub">faenas activas</div>
     </div>
     <div class="kpi teal" id="kpi-card-prom" style="grid-column:span 2;">
-      <div class="kpi-label">Precio Unitario Promedio — Madera</div>
+      <div class="kpi-label">Precio Unitario Madera — por Especie</div>
       <div class="precio-grid" id="precio-grid"></div>
-      <div class="kpi-sub" id="kpi-prom-sub">ponderado por volumen · solo TIPO = MADERA</div>
+      <div class="kpi-sub" id="kpi-prom-sub">ponderado por volumen · valor madera sin bonos</div>
     </div>
     <div class="kpi" style="border-top:0;border-left:2px solid #79c0ff;">
       <div class="kpi-label" style="color:#79c0ff;">Promedio Diario Recepción</div>
@@ -833,14 +833,17 @@ const ESPECIE_CLASE = { 'Eucalyptus': 'euca', 'Pino': 'pino', 'Otros': 'otro' };
 // ── HUELLA ÚNICA PARA DEDUPLICACIÓN ──
 // Identifica una guía de forma única. Dos filas con la misma huella se
 // consideran la MISMA guía y no se duplican al recargar el Excel mes a mes.
-// Clave: NÚMERO + FECHA + PATENTE + PRODUCTO + CANTIDAD (redondeada).
+// Clave: NÚMERO + FECHA + PATENTE + PRODUCTO + CANTIDAD + CONCEPTO.
+// CONCEPTO (FLETE / MADERA) distingue las dos líneas que Laudus puede emitir
+// para una misma guía; sin él, una podría descartarse como falso duplicado.
 function rowKey(r) {
   const num   = String(r['NÚMERO'] ?? '').trim();
   const fecha = String(r.FECHA_STR ?? '').trim();
   const pat   = String(r.PATENTE ?? '').trim().toUpperCase();
   const prod  = String(r.PRODUCTO ?? '').trim().toUpperCase();
   const cant  = Number(r.CANTIDAD ?? 0).toFixed(2);
-  return [num, fecha, pat, prod, cant].join('||');
+  const conc  = String(r.CONCEPTO ?? '').trim().toUpperCase();
+  return [num, fecha, pat, prod, cant, conc].join('||');
 }
 // ID seguro para usar como nombre de documento en Firestore (sin / ni espacios problemáticos)
 function rowDocId(r) {
@@ -1373,24 +1376,21 @@ function renderCharts() {
 // ── KPIs ──
 function renderKPIs() {
   const d = filtered;
-  const esFlete  = r => String(r.TIPO || '').toUpperCase() === 'FLETE';
-  const esMadera = r => String(r.TIPO || '').toUpperCase() === 'MADERA';
+  const esMadera = r => true;  // todo el archivo es madera
+  const esFlete  = r => false;
 
-  const netoTotal = d.reduce((s,r)=>s+(r.NETO||0),0);
-
-  // ── DESCOMPOSICIÓN DEL NETO ──
-  // Identidad:  NETO TOTAL = NETO MADERA + BONOS + FLETE
-  // El NETO de una fila de madera ya incluye su bono. Por eso NETO MADERA
-  // ("neto sin bonos") = NETO de filas MADERA − monto de bonos.
-  // Si el Excel no trae la columna BONOS (datos antiguos), el bono es 0
-  // y entonces NETO MADERA = NETO de las filas de madera.
-  const netoFlete = d.filter(esFlete).reduce((s,r)=>s+(r.NETO||0),0);
-  const netoBrutoMadera = d.filter(esMadera).reduce((s,r)=>s+(r.NETO||0),0);
-  const montoBonosTotal = d.filter(esMadera).reduce((s,r)=>s+((r.BONOS||0)*(r.CANTIDAD||0)),0);
-  const netoMadera = netoBrutoMadera - montoBonosTotal;
-
-  // Cualquier fila con TIPO distinto de MADERA/FLETE queda fuera de la identidad
-  const netoOtros = netoTotal - netoBrutoMadera - netoFlete;
+  // ── IDENTIDAD CONTABLE ──
+  // Cada guía es madera propia. El Excel trae:
+  //   NETO MADERA = COSTO UNIT REAL × CANTIDAD   (valor de la madera)
+  //   BONOS       = bonificación por unidad
+  //   NETO2       = NETO MADERA + (BONOS × CANTIDAD)   ← el neto total real
+  // El campo NETO original es solo la tarifa de flete de Laudus y NO se usa
+  // como neto total. Al cargar, NETO ya viene reemplazado por NETO2.
+  const netoTotal  = d.reduce((s,r)=>s+(r.NETO||0),0);              // = NETO2
+  const netoMadera = d.reduce((s,r)=>s+(r['NETO MADERA']||0),0);
+  const montoBonosTotal = d.reduce((s,r)=>s+((r.BONOS||0)*(r.CANTIDAD||0)),0);
+  const netoFlete  = 0;
+  const netoOtros  = 0;
 
   const volM3 = d.filter(esM3).reduce((s,r)=>s+(r.CANTIDAD||0),0);
   const volMR = d.filter(esMR).reduce((s,r)=>s+(r.CANTIDAD||0),0);
@@ -1398,8 +1398,7 @@ function renderKPIs() {
   const guiasMR = d.filter(esMR).length;
 
   document.getElementById('kpi-neto').textContent  = fmtCLP(netoTotal);
-  document.getElementById('kpi-neto-sub').innerHTML =
-    d.length + ' guías · madera + bonos + flete';
+  document.getElementById('kpi-neto-sub').innerHTML = d.length + ' guías · madera + bonos';
   document.getElementById('kpi-neto-madera').textContent = fmtCLP(netoMadera);
   document.getElementById('kpi-neto-madera-sub').textContent = 'neto sin bonos';
   document.getElementById('kpi-vol').textContent   = fmtNum(volM3,2);
@@ -1413,46 +1412,46 @@ function renderKPIs() {
   document.getElementById('kpi-bonos').textContent = fmtCLP(montoBonosTotal);
   document.getElementById('kpi-bonos-sub').textContent = 'total bonificación';
 
-  // Tarjeta Neto Flete (completa la identidad)
   const elNF = document.getElementById('kpi-neto-flete');
   if (elNF) {
-    elNF.textContent = fmtCLP(netoFlete);
-    document.getElementById('kpi-neto-flete-sub').textContent =
-      d.filter(esFlete).length + ' guías de flete';
+    const card = elNF.closest('.kpi');
+    if (card) card.style.display = 'none';   // no aplica: todo es madera
   }
 
-  // Control de cuadratura: madera + bonos + flete debe dar el neto total
+  // Control de cuadratura: NETO MADERA + BONOS = NETO TOTAL
   const elChk = document.getElementById('kpi-cuadratura');
   if (elChk) {
     if (d.length === 0) {
       elChk.style.display = 'none';
     } else {
       elChk.style.display = 'block';
-      const suma = netoMadera + montoBonosTotal + netoFlete;
-      const dif  = netoTotal - suma;
-      if (Math.abs(dif) < 1) {
-        elChk.innerHTML = '&#10003; Cuadra: madera + bonos + flete = neto total';
+      const dif = netoTotal - (netoMadera + montoBonosTotal);
+      // Tolerancia: los decimales de BONOS producen diferencias de unos pocos pesos
+      if (Math.abs(dif) <= Math.max(10, d.length * 0.01)) {
+        elChk.innerHTML = '&#10003; Cuadra: neto madera ' + fmtCLP(netoMadera) +
+          ' + bonos ' + fmtCLP(montoBonosTotal) + ' = ' + fmtCLP(netoTotal) +
+          (Math.abs(dif) >= 1 ? ' <span style="opacity:.6">(dif. ' + fmtCLP(dif) + ' por redondeo)</span>' : '');
         elChk.style.color = 'var(--madera)';
       } else {
         elChk.innerHTML = '&#9888; Descuadre de ' + fmtCLP(dif) +
-          ' — hay ' + fmtCLP(netoOtros) + ' en filas con TIPO distinto de MADERA/FLETE';
+          ' — neto madera + bonos no coincide con el neto total';
         elChk.style.color = 'var(--red)';
       }
     }
   }
 
   // ── PRECIO UNITARIO PROMEDIO POR ESPECIE × UNIDAD ──
-  // Ponderado por volumen (neto total / cantidad total), no promedio simple.
-  // Solo TIPO = MADERA: incluir FLETE mezclaría dos precios distintos
-  // y distorsionaría el valor real de compra de la madera.
-  const soloMadera = d.filter(r => String(r.TIPO || '').toUpperCase() === 'MADERA');
+  // Todas las guías son madera (el "flete" de Laudus también es madera propia).
+  // Se usa NETO MADERA (= COSTO UNIT REAL × cantidad), que es el valor real de
+  // la madera. No se usa el NETO original, que es la tarifa de flete.
+  const soloMadera = d;
   const grupos = {};
   soloMadera.forEach(r => {
     const esp = especieDe(r);
     const um  = esM3(r) ? 'm³' : 'MR';
     const k   = esp + '|' + um;
     if (!grupos[k]) grupos[k] = { esp, um, neto: 0, cant: 0, guias: 0 };
-    grupos[k].neto += (r.NETO || 0);
+    grupos[k].neto += (r['NETO MADERA'] || 0);
     grupos[k].cant += (r.CANTIDAD || 0);
     grupos[k].guias++;
   });
@@ -1477,12 +1476,12 @@ function renderKPIs() {
   }
 
   const volMaderaTot = soloMadera.reduce((s,r)=>s+(r.CANTIDAD||0),0);
-  const netoMaderaTot = soloMadera.reduce((s,r)=>s+(r.NETO||0),0);
+  const netoMaderaTot = soloMadera.reduce((s,r)=>s+(r['NETO MADERA']||0),0);
   const promGlobal = volMaderaTot > 0 ? netoMaderaTot / volMaderaTot : 0;
   document.getElementById('kpi-prom-sub').innerHTML =
     celdas.length
-      ? `Global: <b>${fmtCLP(promGlobal)}</b> · ponderado por volumen · solo TIPO = MADERA`
-      : 'ponderado por volumen · solo TIPO = MADERA';
+      ? `Global: <b>${fmtCLP(promGlobal)}</b> · ponderado por volumen · valor madera sin bonos`
+      : 'ponderado por volumen · valor madera sin bonos';
 
   // ── PROMEDIO DIARIO CON RECEPCIONES EFECTIVAS ──
   // Un "día efectivo" es un día en que realmente hubo recepción de esa unidad
@@ -1678,11 +1677,16 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
         const cu     = parseFloat(g(r,'COSTO UNITARIO','Costo Unitario')) || 0;
         const cuFinal = (cunit !== 0) ? cunit : cu;
 
+        // TIPO: todo el archivo es MADERA. Las líneas marcadas como FLETE en
+        // Laudus corresponden a madera propia de Forestal La Cabaña despachada
+        // a planta; el flete es solo el concepto de facturación, no otro producto.
+        const tipo = 'MADERA';
+
         return {
           'NÚMERO':         parseInt(g(r,'NÚMERO','NUMERO')) || 0,
           'FECHA_STR':      fechaStr,
           'PROVEEDOR':      String(g(r,'PROVEEDOR2','PROVEEDOR','Proveedor')),
-          'TIPO':           'MADERA',
+          'TIPO':           tipo,
           'CONCEPTO':       String(g(r,'CONCEPTO','Concepto')),
           'PRODUCTO':       String(g(r,'PRODUCTO2','PRODUCTO','Producto') || g(r,'PRODUCTO','Producto')),
           'DESCRIPCIÓN':    String(g(r,'DESCRIPCIÓN','Descripcion','DESCRIPCION')),
