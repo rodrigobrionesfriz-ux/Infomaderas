@@ -175,48 +175,91 @@ body {
 }
 .filter-group select:focus { outline: none; border-color: var(--accent2); }
 
-/* ── COMBOBOX CON BUSCADOR (Proveedor / Centro Costo) ── */
+/* ── COMBOBOX MULTI-SELECCIÓN CON BUSCADOR ── */
 .combo { position: relative; }
-.combo-input {
-  width: 100%;
+.combo-box {
+  min-height: 36px;
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: var(--r);
   color: var(--text);
-  padding: 8px 26px 8px 11px;
+  padding: 5px 26px 5px 8px;
   font-family: 'Sora', sans-serif;
-  font-size: 0.82rem;
-  cursor: text;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
 }
-.combo-input:focus { outline: none; border-color: var(--accent2); }
-.combo-input::placeholder { color: var(--muted); }
-.combo.selected .combo-input { border-color: var(--accent2); font-weight: 600; }
+.combo-box:hover { border-color: var(--accent2); }
+.combo.selected .combo-box { border-color: var(--accent2); }
+.combo-ph { color: var(--muted); padding: 2px 2px; }
+.chip {
+  background: var(--bg);
+  border: 1px solid var(--accent2);
+  color: var(--accent2);
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  display: inline-flex; align-items: center; gap: 4px;
+  max-width: 165px;
+}
+.chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip b { cursor: pointer; font-weight: 700; opacity: 0.75; }
+.chip b:hover { opacity: 1; color: var(--red); }
+.chip.more { border-color: var(--muted); color: var(--muted); }
 .combo-clear {
-  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  position: absolute; right: 8px; top: 17px; transform: translateY(-50%);
   color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer;
-  display: none; padding: 0 2px;
+  display: none; padding: 0 2px; z-index: 2;
 }
 .combo-clear:hover { color: var(--red); }
 .combo.selected .combo-clear { display: block; }
 .combo-list {
   display: none;
   position: absolute; top: calc(100% + 4px); left: 0;
-  min-width: 100%; width: max-content; max-width: 380px;
-  max-height: 260px; overflow-y: auto;
+  min-width: 100%; width: max-content; max-width: 400px;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--r); z-index: 500;
   box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+  overflow: hidden;
 }
 .combo-list.open { display: block; }
-.combo-opt {
-  padding: 8px 12px; font-size: 0.8rem; color: var(--text);
-  cursor: pointer; white-space: nowrap;
+.combo-search {
+  width: 100%; box-sizing: border-box;
+  background: var(--surface2); border: none;
   border-bottom: 1px solid var(--border);
+  color: var(--text); padding: 9px 11px;
+  font-family: 'Sora', sans-serif; font-size: 0.8rem;
 }
-.combo-opt:last-child { border-bottom: none; }
-.combo-opt:hover, .combo-opt.active { background: var(--surface2); color: var(--accent2); }
+.combo-search:focus { outline: none; }
+.combo-search::placeholder { color: var(--muted); }
+.combo-actions {
+  display: flex; gap: 10px; padding: 6px 11px;
+  border-bottom: 1px solid var(--border); background: var(--surface2);
+}
+.combo-actions button {
+  background: none; border: none; color: var(--accent2);
+  font-family: 'Sora', sans-serif; font-size: 0.7rem; font-weight: 600;
+  cursor: pointer; padding: 0;
+}
+.combo-actions button:hover { text-decoration: underline; }
+.combo-opts { max-height: 240px; overflow-y: auto; }
+.combo-opt {
+  padding: 7px 11px; font-size: 0.79rem; color: var(--text);
+  cursor: pointer; white-space: nowrap;
+  display: flex; align-items: center; gap: 8px;
+}
+.combo-opt:hover, .combo-opt.active { background: var(--surface2); }
+.combo-opt .cbx {
+  width: 14px; height: 14px; flex: 0 0 14px;
+  border: 1.5px solid var(--border); border-radius: 3px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; color: #fff; line-height: 1;
+}
+.combo-opt.on .cbx { background: var(--accent2); border-color: var(--accent2); }
+.combo-opt .cnt { margin-left: auto; color: var(--muted); font-size: 0.68rem; padding-left: 10px; }
 .combo-opt.empty { color: var(--muted); cursor: default; font-style: italic; }
-.combo-opt.empty:hover { background: transparent; color: var(--muted); }
+.combo-opt.empty:hover { background: transparent; }
 .combo-opt mark { background: transparent; color: var(--accent); font-weight: 700; }
 .filter-reset {
   background: transparent;
@@ -626,30 +669,48 @@ footer {
   <div class="filters-bar">
     <div class="filter-group">
       <label>Mes</label>
-      <select id="f-mes"><option value="">Todos</option></select>
+      <div class="combo" id="combo-mes">
+        <div class="combo-box" id="cb-mes"><span class="combo-ph">Todos</span></div>
+        <span class="combo-clear" id="cx-mes" title="Limpiar">&times;</span>
+        <div class="combo-list" id="cl-mes"></div>
+      </div>
     </div>
     <div class="filter-group">
       <label>Planta destino</label>
-      <select id="f-planta"><option value="">Todas</option></select>
+      <div class="combo" id="combo-planta">
+        <div class="combo-box" id="cb-planta"><span class="combo-ph">Todas</span></div>
+        <span class="combo-clear" id="cx-planta" title="Limpiar">&times;</span>
+        <div class="combo-list" id="cl-planta"></div>
+      </div>
     </div>
     <div class="filter-group">
       <label>Bodega / Destino</label>
-      <select id="f-bodega"><option value="">Todas</option></select>
+      <div class="combo" id="combo-bodega">
+        <div class="combo-box" id="cb-bodega"><span class="combo-ph">Todas</span></div>
+        <span class="combo-clear" id="cx-bodega" title="Limpiar">&times;</span>
+        <div class="combo-list" id="cl-bodega"></div>
+      </div>
     </div>
     <div class="filter-group">
       <label>Proveedor</label>
       <div class="combo" id="combo-proveedor">
-        <input type="text" class="combo-input" id="ci-proveedor" placeholder="Todos" autocomplete="off">
-        <input type="hidden" id="f-proveedor" value="">
+        <div class="combo-box" id="cb-proveedor"><span class="combo-ph">Todos</span></div>
         <span class="combo-clear" id="cx-proveedor" title="Limpiar">&times;</span>
         <div class="combo-list" id="cl-proveedor"></div>
       </div>
     </div>
     <div class="filter-group">
+      <label>Rol</label>
+      <div class="combo" id="combo-rol">
+        <div class="combo-box" id="cb-rol"><span class="combo-ph">Todos</span></div>
+        <span class="combo-clear" id="cx-rol" title="Limpiar">&times;</span>
+        <div class="combo-list" id="cl-rol"></div>
+      </div>
+    </div>
+    <div class="filter-group">
       <label>Centro Costo</label>
       <div class="combo" id="combo-cc">
-        <input type="text" class="combo-input" id="ci-cc" placeholder="Todos" autocomplete="off">
-        <input type="hidden" id="f-cc" value="">
+        <div class="combo-box" id="cb-cc"><span class="combo-ph">Todos</span></div>
         <span class="combo-clear" id="cx-cc" title="Limpiar">&times;</span>
         <div class="combo-list" id="cl-cc"></div>
       </div>
@@ -954,210 +1015,314 @@ function inferPeriod(data) {
 // ── POPULATE FILTERS ──
 const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
-function populateFilters(data) {
-  // Meses únicos presentes en los datos (formato yyyy-mm)
-  const meses   = [...new Set(data.map(r => r.FECHA_STR ? r.FECHA_STR.slice(0,7) : '').filter(Boolean))].sort();
-  const plantas = [...new Set(data.map(r => r.PLANTA).filter(Boolean))].sort();
-  const bodegas = [...new Set(data.map(r => r.BODEGA).filter(Boolean))].sort();
-  const provs   = [...new Set(data.map(r => r.PROVEEDOR2).filter(Boolean))].sort();
-  const ccs     = [...new Set(data.map(r => r['CENTRO COSTO']).filter(Boolean))].sort();
+// ══════════════════════════════════════════════════════════════
+//  FILTROS MULTI-SELECCIÓN CON BUSCADOR Y CASCADA
+//  Cada filtro admite varios valores. Las opciones disponibles de
+//  un filtro se recalculan según lo seleccionado en los demás
+//  (cascada), de modo que al elegir un proveedor, el filtro de Rol
+//  solo ofrece los roles de ese proveedor.
+// ══════════════════════════════════════════════════════════════
 
-  const fill = (id, vals, defaultTxt='Todas') => {
-    const sel = document.getElementById(id);
-    const cur = sel.value;
-    sel.innerHTML = `<option value="">${defaultTxt}</option>`;
-    vals.forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; if(v===cur) o.selected=true; sel.appendChild(o); });
-  };
+// Definición de cada filtro: cómo se extrae su valor de una fila.
+const FILTROS = {
+  mes:       { get: r => (r.FECHA_STR || '').slice(0,7), label: 'Mes'          },
+  planta:    { get: r => r.PLANTA || 'Sin dato',         label: 'Planta'       },
+  bodega:    { get: r => r.BODEGA || 'Sin dato',         label: 'Bodega'       },
+  proveedor: { get: r => r.PROVEEDOR2 || 'Sin dato',     label: 'Proveedor'    },
+  rol:       { get: r => rolDe(r),                       label: 'Rol'          },
+  cc:        { get: r => r['CENTRO COSTO'] || 'Sin dato',label: 'Centro Costo' },
+};
+const FILTRO_IDS = Object.keys(FILTROS);
 
-  // Mes con etiqueta legible: "Febrero 2026"
-  const selMes = document.getElementById('f-mes');
-  const curMes = selMes.value;
-  selMes.innerHTML = '<option value="">Todos</option>';
-  meses.forEach(m => {
-    const [y, mo] = m.split('-');
-    const label = MESES_ES[parseInt(mo,10)-1] + ' ' + y;
-    const o = document.createElement('option');
-    o.value = m; o.textContent = label;
-    if (m === curMes) o.selected = true;
-    selMes.appendChild(o);
+// Selección actual: { mes: Set, planta: Set, ... }
+const seleccion = {};
+FILTRO_IDS.forEach(k => seleccion[k] = new Set());
+
+// Texto de búsqueda por combo (no se persiste al cerrar)
+const comboQuery = {};
+
+// El ROL es el prefijo del centro de costo: "68-357 RENAICO..." -> "68-357"
+function rolDe(r) {
+  const cc = String(r['CENTRO COSTO'] || '').trim();
+  const m = cc.match(/^\s*(\d+\s*-\s*\d+)/);
+  return m ? m[1].replace(/\s+/g,'') : 'Sin rol';
+}
+
+// Devuelve las filas que pasan todos los filtros EXCEPTO el indicado.
+// Es la base de la cascada: para saber qué opciones ofrecer en 'rol',
+// se filtra por todo lo demás menos 'rol'.
+function filasExcepto(excluir) {
+  return allData.filter(r =>
+    FILTRO_IDS.every(k => {
+      if (k === excluir) return true;
+      const sel = seleccion[k];
+      return sel.size === 0 || sel.has(FILTROS[k].get(r));
+    })
+  );
+}
+
+// Filas que pasan TODOS los filtros
+function filasFiltradas() {
+  return allData.filter(r =>
+    FILTRO_IDS.every(k => {
+      const sel = seleccion[k];
+      return sel.size === 0 || sel.has(FILTROS[k].get(r));
+    })
+  );
+}
+
+// Opciones disponibles para un filtro, con el conteo de guías de cada una.
+function opcionesDe(id) {
+  const base = filasExcepto(id);
+  const conteo = new Map();
+  base.forEach(r => {
+    const v = FILTROS[id].get(r);
+    if (v === '') return;
+    conteo.set(v, (conteo.get(v) || 0) + 1);
   });
-
-  fill('f-planta',   plantas, 'Todas');
-  fill('f-bodega',   bodegas, 'Todas');
-  // Proveedor y Centro de Costo usan combobox con buscador dinámico
-  setComboOptions('proveedor', provs);
-  setComboOptions('cc',        ccs);
-}
-
-// ── COMBOBOX CON BUSCADOR DINÁMICO ──
-const COMBOS = {};  // { proveedor: {opciones:[...]}, cc: {...} }
-
-function setComboOptions(name, opciones) {
-  COMBOS[name] = COMBOS[name] || {};
-  COMBOS[name].opciones = opciones;
-  const hidden = document.getElementById('f-' + name);
-  const input  = document.getElementById('ci-' + name);
-  // Si el valor seleccionado ya no existe en los datos, se limpia
-  if (hidden.value && !opciones.includes(hidden.value)) {
-    hidden.value = '';
-    input.value = '';
-  }
-  syncComboUI(name);
-}
-
-function syncComboUI(name) {
-  const wrap   = document.getElementById('combo-' + name);
-  const hidden = document.getElementById('f-' + name);
-  const input  = document.getElementById('ci-' + name);
-  if (hidden.value) {
-    wrap.classList.add('selected');
-    input.value = hidden.value;
-  } else {
-    wrap.classList.remove('selected');
-    input.value = '';
-  }
+  let arr = [...conteo.entries()];
+  if (id === 'mes') arr.sort((a,b) => b[0].localeCompare(a[0]));           // más reciente primero
+  else if (id === 'rol') arr.sort((a,b) => b[1] - a[1]);                   // por nº de guías
+  else arr.sort((a,b) => String(a[0]).localeCompare(String(b[0]),'es'));
+  return arr;  // [ [valor, conteo], ... ]
 }
 
 function escHtml(s) {
   return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 }
-
-// Resalta el término buscado dentro de la opción
-function marcar(texto, q) {
-  if (!q) return escHtml(texto);
-  const i = texto.toLowerCase().indexOf(q.toLowerCase());
-  if (i < 0) return escHtml(texto);
-  return escHtml(texto.slice(0,i)) + '<mark>' + escHtml(texto.slice(i, i+q.length)) + '</mark>' + escHtml(texto.slice(i+q.length));
+// Normaliza para buscar: minúsculas y sin acentos/ñ, de modo que
+// "cabana" encuentre "CABAÑA" y "canada" encuentre "CANADÁ".
+function normaliza(s) {
+  return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
-function renderComboList(name, query) {
-  const list = document.getElementById('cl-' + name);
-  const opciones = (COMBOS[name] && COMBOS[name].opciones) || [];
-  const q = (query || '').trim().toLowerCase();
-  const matches = q ? opciones.filter(o => String(o).toLowerCase().includes(q)) : opciones;
-
-  let html = `<div class="combo-opt" data-val="">${name==='cc' ? 'Todos' : 'Todos'}</div>`;
-  if (matches.length === 0) {
-    html += '<div class="combo-opt empty">Sin coincidencias</div>';
-  } else {
-    matches.slice(0, 300).forEach(o => {
-      html += `<div class="combo-opt" data-val="${escHtml(o)}">${marcar(String(o), q)}</div>`;
-    });
+function marcar(texto, q) {
+  const t = String(texto);
+  if (!q) return escHtml(t);
+  const tn = normaliza(t);
+  // Se resalta la primera palabra de la búsqueda que aparezca en el texto
+  for (const w of normaliza(q).split(/\s+/).filter(Boolean)) {
+    const i = tn.indexOf(w);
+    if (i >= 0) {
+      return escHtml(t.slice(0,i)) + '<mark>' + escHtml(t.slice(i, i+w.length)) + '</mark>' + escHtml(t.slice(i+w.length));
+    }
   }
-  list.innerHTML = html;
-  list.classList.add('open');
+  return escHtml(t);
+}
+function etiquetaMes(v) {
+  const [a,m] = String(v).split('-');
+  const nombres = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  return (nombres[parseInt(m,10)] || v) + ' ' + a;
+}
+function textoOpcion(id, v) { return id === 'mes' ? etiquetaMes(v) : String(v); }
 
-  list.querySelectorAll('.combo-opt[data-val]').forEach(el => {
-    el.addEventListener('mousedown', e => {   // mousedown: se dispara antes del blur
-      e.preventDefault();
-      elegirCombo(name, el.getAttribute('data-val'));
+// Dibuja los chips del filtro cerrado
+function syncComboUI(id) {
+  const wrap = document.getElementById('combo-' + id);
+  const box  = document.getElementById('cb-' + id);
+  const sel  = [...seleccion[id]];
+  if (sel.length === 0) {
+    wrap.classList.remove('selected');
+    const ph = (id === 'planta' || id === 'bodega') ? 'Todas' : 'Todos';
+    box.innerHTML = '<span class="combo-ph">' + ph + '</span>';
+    return;
+  }
+  wrap.classList.add('selected');
+  const MAX = 2;
+  let html = sel.slice(0, MAX).map(v =>
+    `<span class="chip"><span>${escHtml(textoOpcion(id,v))}</span><b data-q="${escHtml(v)}">&times;</b></span>`
+  ).join('');
+  if (sel.length > MAX) html += `<span class="chip more">+${sel.length - MAX}</span>`;
+  box.innerHTML = html;
+  box.querySelectorAll('.chip b').forEach(b => {
+    b.addEventListener('click', e => {
+      e.stopPropagation();
+      seleccion[id].delete(b.getAttribute('data-q'));
+      onFiltroCambia(id);
     });
   });
 }
 
-function elegirCombo(name, val) {
-  document.getElementById('f-' + name).value = val || '';
-  cerrarCombo(name);
-  syncComboUI(name);
-  applyFilters();
+// Dibuja el desplegable: buscador + acciones + opciones con checkbox
+// Dibuja SOLO la lista de opciones. No toca el <input> del buscador, porque
+// recrearlo en cada tecla reiniciaba el cursor a la posición 0 y el texto
+// se escribía al revés.
+function renderOpciones(id) {
+  const list = document.getElementById('cl-' + id);
+  const cont = list.querySelector('.combo-opts');
+  if (!cont) return;
+  const q = (comboQuery[id] || '').trim();
+  const sel = seleccion[id];
+
+  const opciones = opcionesDe(id);
+  // Los valores ya seleccionados siempre se muestran, aunque la cascada
+  // los deje sin filas (si no, no habría forma de deseleccionarlos).
+  const presentes = new Set(opciones.map(o => o[0]));
+  sel.forEach(v => { if (!presentes.has(v)) opciones.push([v, 0]); });
+
+  const qn = normaliza(q);
+  // Se busca por palabras: todas deben aparecer, en cualquier orden.
+  // Así "aurora forestal" encuentra "FORESTAL AURORA SPA".
+  const terminos = qn.split(/\s+/).filter(Boolean);
+  const vis = terminos.length
+    ? opciones.filter(o => {
+        const t = normaliza(textoOpcion(id, o[0]));
+        return terminos.every(w => t.includes(w));
+      })
+    : opciones;
+  list._vis = vis;   // lo usa "Seleccionar todo"
+
+  let html = '';
+  if (vis.length === 0) {
+    html = '<div class="combo-opt empty">Sin coincidencias</div>';
+  } else {
+    vis.slice(0, 400).forEach(([v, n]) => {
+      const on = sel.has(v);
+      html += `<div class="combo-opt ${on?'on':''}" data-v="${escHtml(v)}">
+        <span class="cbx">${on ? '&#10003;' : ''}</span>
+        <span>${marcar(textoOpcion(id,v), q)}</span>
+        <span class="cnt">${n}</span>
+      </div>`;
+    });
+  }
+  cont.innerHTML = html;
+
+  cont.querySelectorAll('.combo-opt[data-v]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      toggleOpcion(id, el.getAttribute('data-v'));
+    });
+  });
 }
 
-function cerrarCombo(name) {
-  const list = document.getElementById('cl-' + name);
-  if (list) list.classList.remove('open');
-}
+// Construye el desplegable completo (una sola vez, al abrirlo)
+function renderComboList(id) {
+  const list = document.getElementById('cl-' + id);
 
-function initCombo(name) {
-  const input  = document.getElementById('ci-' + name);
-  const clear  = document.getElementById('cx-' + name);
-  const hidden = document.getElementById('f-' + name);
+  list.innerHTML =
+    `<input type="text" class="combo-search" id="cs-${id}" placeholder="Buscar…" autocomplete="off">` +
+    `<div class="combo-actions">
+       <button data-act="all">Seleccionar todo</button>
+       <button data-act="none">Ninguno</button>
+     </div>
+     <div class="combo-opts"></div>`;
+  list.classList.add('open');
 
-  // Al enfocar: abre la lista completa y deja escribir para filtrar
-  input.addEventListener('focus', () => { input.value = ''; renderComboList(name, ''); });
-  input.addEventListener('input', () => renderComboList(name, input.value));
+  const search = document.getElementById('cs-' + id);
+  search.value = comboQuery[id] || '';
 
-  input.addEventListener('keydown', e => {
-    const list = document.getElementById('cl-' + name);
-    const opts = [...list.querySelectorAll('.combo-opt[data-val]')];
-    let idx = opts.findIndex(o => o.classList.contains('active'));
-    if (e.key === 'ArrowDown') {
+  search.addEventListener('input', () => {
+    comboQuery[id] = search.value;
+    renderOpciones(id);          // solo repinta opciones: el cursor no se mueve
+  });
+  search.addEventListener('keydown', e => {
+    if (e.key === 'Escape') cerrarCombo(id);
+    if (e.key === 'Enter') {
       e.preventDefault();
-      if (!list.classList.contains('open')) renderComboList(name, input.value);
-      idx = Math.min(idx + 1, opts.length - 1);
-      opts.forEach(o => o.classList.remove('active'));
-      if (opts[idx]) { opts[idx].classList.add('active'); opts[idx].scrollIntoView({block:'nearest'}); }
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      idx = Math.max(idx - 1, 0);
-      opts.forEach(o => o.classList.remove('active'));
-      if (opts[idx]) { opts[idx].classList.add('active'); opts[idx].scrollIntoView({block:'nearest'}); }
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      const sel = opts[idx >= 0 ? idx : 0];
-      if (sel) elegirCombo(name, sel.getAttribute('data-val'));
-    } else if (e.key === 'Escape') {
-      cerrarCombo(name); input.blur();
+      const primero = list.querySelector('.combo-opt[data-v]');
+      if (primero) toggleOpcion(id, primero.getAttribute('data-v'));
     }
   });
 
-  // Al salir sin elegir: restaura lo que estaba seleccionado
-  input.addEventListener('blur', () => {
-    setTimeout(() => { cerrarCombo(name); syncComboUI(name); }, 120);
+  list.querySelectorAll('.combo-actions button').forEach(b => {
+    b.addEventListener('click', e => {
+      e.stopPropagation();
+      if (b.getAttribute('data-act') === 'all') (list._vis || []).forEach(([v]) => seleccion[id].add(v));
+      else seleccion[id].clear();
+      // Se repinta sin reconstruir el buscador, para no perder el texto escrito
+      syncComboUI(id);
+      FILTRO_IDS.forEach(k => { if (k !== id) syncComboUI(k); });
+      podarSelecciones(id);
+      renderOpciones(id);
+      applyFilters();
+    });
   });
 
-  clear.addEventListener('click', e => {
-    e.stopPropagation();
-    hidden.value = '';
-    syncComboUI(name);
-    applyFilters();
+  renderOpciones(id);
+  setTimeout(() => search.focus(), 10);
+}
+
+function toggleOpcion(id, v) {
+  if (seleccion[id].has(v)) seleccion[id].delete(v);
+  else seleccion[id].add(v);
+  onFiltroCambia(id, true);
+}
+
+// Tras cambiar un filtro: se repinta ese combo, se limpian selecciones de
+// otros filtros que quedaron sin sustento, y se recalcula todo el informe.
+function onFiltroCambia(id, mantenerAbierto) {
+  podarSelecciones(id);
+  syncComboUI(id);
+  FILTRO_IDS.forEach(k => { if (k !== id) syncComboUI(k); });
+  // Solo se repintan las opciones: si se reconstruyera el desplegable,
+  // el buscador perdería el foco y el texto ya escrito.
+  if (mantenerAbierto) renderOpciones(id);
+  applyFilters();
+}
+
+// Si al filtrar por proveedor un rol seleccionado ya no tiene ninguna guía,
+// esa selección se descarta: de lo contrario el informe quedaría vacío
+// por una condición que el usuario ya no puede ver ni corregir.
+function podarSelecciones(origen) {
+  FILTRO_IDS.forEach(k => {
+    if (k === origen || seleccion[k].size === 0) return;
+    const validos = new Set(filasExcepto(k).map(r => FILTROS[k].get(r)));
+    [...seleccion[k]].forEach(v => { if (!validos.has(v)) seleccion[k].delete(v); });
   });
 }
 
-initCombo('proveedor');
-initCombo('cc');
+function cerrarCombo(id) {
+  const l = document.getElementById('cl-' + id);
+  if (l) l.classList.remove('open');
+  comboQuery[id] = '';
+}
 
-// Cierra los combos al hacer clic fuera
+function initCombo(id) {
+  const box   = document.getElementById('cb-' + id);
+  const clear = document.getElementById('cx-' + id);
+  box.addEventListener('click', () => {
+    const list = document.getElementById('cl-' + id);
+    const abierto = list.classList.contains('open');
+    FILTRO_IDS.forEach(cerrarCombo);
+    if (!abierto) renderComboList(id);
+  });
+  clear.addEventListener('click', e => {
+    e.stopPropagation();
+    seleccion[id].clear();
+    onFiltroCambia(id);
+  });
+}
+
+// populateFilters queda por compatibilidad: los combos se alimentan solos
+// desde allData mediante opcionesDe(), así que basta con repintarlos.
+function populateFilters(data) {
+  FILTRO_IDS.forEach(id => {
+    // Descarta selecciones que ya no existan tras una recarga de datos
+    const validos = new Set(allData.map(r => FILTROS[id].get(r)));
+    [...seleccion[id]].forEach(v => { if (!validos.has(v)) seleccion[id].delete(v); });
+    syncComboUI(id);
+  });
+}
+
+FILTRO_IDS.forEach(initCombo);
+
 document.addEventListener('click', e => {
-  ['proveedor','cc'].forEach(n => {
-    const wrap = document.getElementById('combo-' + n);
-    if (wrap && !wrap.contains(e.target)) cerrarCombo(n);
+  FILTRO_IDS.forEach(id => {
+    const wrap = document.getElementById('combo-' + id);
+    if (wrap && !wrap.contains(e.target)) cerrarCombo(id);
   });
 });
 
-function getFilters() {
-  return {
-    mes:      document.getElementById('f-mes').value,
-    planta:   document.getElementById('f-planta').value,
-    bodega:   document.getElementById('f-bodega').value,
-    proveedor:document.getElementById('f-proveedor').value,
-    cc:       document.getElementById('f-cc').value,
-  };
-}
-
 function applyFilters() {
-  const f = getFilters();
-  filtered = allData.filter(r => {
-    if (f.mes && (r.FECHA_STR||'').slice(0,7) !== f.mes) return false;
-    if (f.planta && r.PLANTA !== f.planta) return false;
-    if (f.bodega && r.BODEGA !== f.bodega) return false;
-    if (f.proveedor && r.PROVEEDOR2 !== f.proveedor) return false;
-    if (f.cc && r['CENTRO COSTO'] !== f.cc) return false;
-    return true;
-  });
+  filtered = filasFiltradas();
   page = 1;
   render();
 }
 
 document.getElementById('btnReset').addEventListener('click', () => {
-  ['f-mes','f-planta','f-bodega','f-proveedor','f-cc'].forEach(id => document.getElementById(id).value='');
-  syncComboUI('proveedor');
-  syncComboUI('cc');
+  FILTRO_IDS.forEach(id => { seleccion[id].clear(); cerrarCombo(id); syncComboUI(id); });
   applyFilters();
 });
-// Los selects normales disparan change; proveedor y CC se manejan vía combobox
-['f-mes','f-planta','f-bodega'].forEach(id =>
-  document.getElementById(id).addEventListener('change', applyFilters)
-);
 document.getElementById('tableSearch').addEventListener('input', e => {
   tableSearch = e.target.value.toLowerCase();
   page = 1;
@@ -1738,10 +1903,8 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
       allData.sort((a,b) => (a.FECHA_STR||'') < (b.FECHA_STR||'') ? 1 : (a.FECHA_STR||'') > (b.FECHA_STR||'') ? -1 : 0);
 
       filtered = [...allData];
-      ['f-mes','f-planta','f-bodega','f-proveedor','f-cc'].forEach(id => document.getElementById(id).value='');
+      FILTRO_IDS.forEach(id => seleccion[id].clear());
       populateFilters(allData);
-      syncComboUI('proveedor');
-      syncComboUI('cc');
       page = 1;
       render();
 
