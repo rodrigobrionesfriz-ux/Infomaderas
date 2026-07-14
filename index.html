@@ -944,6 +944,20 @@ footer {
 
 <footer>Forestal La Cabaña Ltda. &nbsp;·&nbsp; Informe Gerencial Madera</footer>
 
+<!-- ═══════════ DETALLE DE PROVEEDOR (drill-down) ═══════════ -->
+<div id="dpOverlay" class="dp-overlay">
+  <div class="dp-modal">
+    <div class="dp-head">
+      <div>
+        <div class="dp-title" id="dpTitulo">—</div>
+        <div class="dp-subtitle" id="dpSub"></div>
+      </div>
+      <button class="dp-close" id="dpClose" title="Cerrar">&times;</button>
+    </div>
+    <div class="dp-body" id="dpBody"></div>
+  </div>
+</div>
+
 <script>
 // ── EMBEDDED DATA ──
 const EMBEDDED_DATA = [];  // Vacío: todos los datos provienen de Firestore tras iniciar sesión.
@@ -1406,13 +1420,22 @@ document.getElementById('btnReset').addEventListener('click', () => {
 });
 
 // ── Cierre del detalle de proveedor ──
-document.getElementById('dpClose').addEventListener('click', cerrarDetalleProveedor);
-document.getElementById('dpOverlay').addEventListener('click', e => {
-  if (e.target.id === 'dpOverlay') cerrarDetalleProveedor();   // clic fuera del panel
-});
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') cerrarDetalleProveedor();
-});
+// Se comprueba la existencia de cada nodo: si faltara, un getElementById nulo
+// lanzaría una excepción que detendría el resto del script.
+(function initDetalleProveedor() {
+  const btn     = document.getElementById('dpClose');
+  const overlay = document.getElementById('dpOverlay');
+  if (btn) btn.addEventListener('click', cerrarDetalleProveedor);
+  if (overlay) {
+    overlay.addEventListener('click', e => {
+      // Solo si el clic fue en el fondo, no dentro del panel
+      if (e.target === overlay) cerrarDetalleProveedor();
+    });
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') cerrarDetalleProveedor();
+  });
+})();
 document.getElementById('tableSearch').addEventListener('input', e => {
   tableSearch = e.target.value.toLowerCase();
   page = 1;
@@ -1527,7 +1550,8 @@ function filtroActivo() {
 }
 
 function cerrarDetalleProveedor() {
-  document.getElementById('dpOverlay').style.display = 'none';
+  const o = document.getElementById('dpOverlay');
+  if (o) o.style.display = 'none';
 }
 
 function mkChart(id, type, data, options={}) {
@@ -2199,20 +2223,6 @@ render();
      Si dejas FIREBASE_CONFIG con los valores "TU_...", la app funciona
      igual pero SOLO en modo local (sin sincronizar).
      ═══════════════════════════════════════════════════════════════════ -->
-<!-- ═══════════ DETALLE DE PROVEEDOR (drill-down) ═══════════ -->
-<div id="dpOverlay" class="dp-overlay">
-  <div class="dp-modal">
-    <div class="dp-head">
-      <div>
-        <div class="dp-title" id="dpTitulo">—</div>
-        <div class="dp-subtitle" id="dpSub"></div>
-      </div>
-      <button class="dp-close" id="dpClose" title="Cerrar">&times;</button>
-    </div>
-    <div class="dp-body" id="dpBody"></div>
-  </div>
-</div>
-
 <!-- ═══════════════ OVERLAY DE LOGIN (Firebase Auth) ═══════════════ -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(9,12,17,0.92);backdrop-filter:blur(4px);align-items:center;justify-content:center;">
   <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:2rem 2rem 1.75rem;width:340px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,0.5);font-family:'Sora',sans-serif;color:#e6edf3;">
