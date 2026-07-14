@@ -378,6 +378,87 @@ body {
 .precio-meta { font-size: 0.62rem; color: var(--muted); margin-top: 1px; }
 .precio-vacio { color: var(--muted); font-size: 0.78rem; padding: 8px 2px; font-style: italic; }
 
+/* ── DETALLE DE PROVEEDOR (drill-down) ── */
+.dp-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 900;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(3px);
+  align-items: center; justify-content: center;
+  padding: 1rem;
+}
+.dp-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  width: 100%; max-width: 760px;
+  max-height: 88vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.5);
+}
+.dp-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 1rem; padding: 1rem 1.1rem;
+  border-bottom: 1px solid var(--border);
+}
+.dp-title { font-size: 0.98rem; font-weight: 700; color: var(--text); line-height: 1.3; }
+.dp-subtitle { font-size: 0.73rem; color: var(--muted); margin-top: 3px; }
+.dp-close {
+  background: none; border: none; color: var(--muted);
+  font-size: 1.5rem; line-height: 1; cursor: pointer; padding: 0 4px;
+}
+.dp-close:hover { color: var(--red); }
+.dp-body { padding: 1rem 1.1rem 1.2rem; overflow-y: auto; }
+
+.dp-kpis {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr));
+  gap: 8px; margin-bottom: 1rem;
+}
+.dp-kpi {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent2);
+  border-radius: 6px; padding: 8px 10px;
+}
+.dp-kpi span {
+  display: block; font-size: 0.62rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; margin-bottom: 3px;
+}
+.dp-kpi b { font-size: 0.95rem; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1.3; }
+.dp-kpi i { display: block; font-style: normal; font-size: 0.66rem; color: var(--muted); margin-top: 2px; }
+
+.dp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px,1fr)); gap: 10px; }
+.dp-block {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 9px 11px;
+}
+.dp-h {
+  font-size: 0.66rem; color: var(--accent2); text-transform: uppercase;
+  letter-spacing: 0.5px; font-weight: 700; margin-bottom: 7px;
+  display: flex; align-items: center; gap: 6px;
+}
+.dp-n {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 3px; padding: 0 4px; color: var(--muted); font-size: 0.62rem;
+}
+.dp-row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  padding: 4px 0; border-bottom: 1px dashed var(--border);
+  font-size: 0.75rem;
+}
+.dp-row:last-of-type { border-bottom: none; }
+.dp-k {
+  color: var(--text); overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; flex: 1; min-width: 0;
+}
+.dp-v {
+  color: var(--text); font-weight: 600; text-align: right;
+  white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.dp-v i { display: block; font-style: normal; font-size: 0.64rem; color: var(--muted); font-weight: 400; }
+.dp-more { font-size: 0.66rem; color: var(--muted); padding-top: 5px; font-style: italic; }
+
+@media print { .dp-overlay { display: none !important; } }
+
 /* ── CHARTS GRID ── */
 .charts-grid {
   display: grid;
@@ -797,7 +878,7 @@ footer {
       </div>
     </div>
     <div class="chart-card">
-      <h3>Top proveedores — <em>Neto CLP</em></h3>
+      <h3>Top proveedores — <em>Neto CLP</em> <span style="font-size:0.65rem;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">· clic en una barra para ver el detalle</span></h3>
       <div class="chart-wrap" style="height:220px">
         <canvas id="chartProv"></canvas>
       </div>
@@ -1323,6 +1404,15 @@ document.getElementById('btnReset').addEventListener('click', () => {
   FILTRO_IDS.forEach(id => { seleccion[id].clear(); cerrarCombo(id); syncComboUI(id); });
   applyFilters();
 });
+
+// ── Cierre del detalle de proveedor ──
+document.getElementById('dpClose').addEventListener('click', cerrarDetalleProveedor);
+document.getElementById('dpOverlay').addEventListener('click', e => {
+  if (e.target.id === 'dpOverlay') cerrarDetalleProveedor();   // clic fuera del panel
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') cerrarDetalleProveedor();
+});
 document.getElementById('tableSearch').addEventListener('input', e => {
   tableSearch = e.target.value.toLowerCase();
   page = 1;
@@ -1339,6 +1429,105 @@ function chartDefaults() {
       y: { ticks: { color:TC.tick, font:{size:10} }, grid: { color:TC.grid } }
     }
   };
+}
+
+// ══════════════════════════════════════════════════════════════
+//  DETALLE DE PROVEEDOR (clic en el gráfico Top Proveedores)
+//  Respeta los filtros activos: si hay un mes filtrado, el detalle
+//  corresponde solo a ese mes, igual que el resto del informe.
+// ══════════════════════════════════════════════════════════════
+function abrirDetalleProveedor(prov) {
+  const rows = filtered.filter(r => (r.PROVEEDOR2 || 'Sin dato') === prov);
+  if (!rows.length) return;
+
+  const volM3 = rows.filter(esM3).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+  const volMR = rows.filter(esMR).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+  const neto  = rows.reduce((s,r)=>s+(r.NETO||0),0);
+  const netoMadera = rows.reduce((s,r)=>s+(r['NETO MADERA']||0),0);
+
+  // Promedio de entregas diarias: guías ÷ días con recepción efectiva
+  const dias = new Set(rows.filter(r => (r.CANTIDAD||0) > 0).map(r => r.FECHA_STR).filter(Boolean));
+  const nDias = dias.size;
+  const guiasDia = nDias ? rows.length / nDias : 0;
+  const m3Dia = nDias ? volM3 / nDias : 0;
+  const mrDia = nDias ? volMR / nDias : 0;
+
+  // Agrupa por una clave y devuelve [valor, volumen, nº guías] ordenado
+  const agrupa = (fn) => {
+    const m = new Map();
+    rows.forEach(r => {
+      const k = fn(r) || 'Sin dato';
+      const a = m.get(k) || { vol: 0, n: 0, m3: 0, mr: 0 };
+      a.vol += (r.CANTIDAD||0);
+      a.n++;
+      if (esM3(r)) a.m3 += (r.CANTIDAD||0); else a.mr += (r.CANTIDAD||0);
+      m.set(k, a);
+    });
+    return [...m.entries()].sort((a,b) => b[1].vol - a[1].vol);
+  };
+
+  const porCC      = agrupa(r => r['CENTRO COSTO']);
+  const porBodega  = agrupa(r => r.BODEGA);
+  const porPlanta  = agrupa(r => r.PLANTA);
+  const porProd    = agrupa(r => r['DESCRIPCIÓN'] || r.PRODUCTO);
+
+  const volTxt = (a) => {
+    const p = [];
+    if (a.m3 > 0) p.push(fmtNum(a.m3,1) + ' m³');
+    if (a.mr > 0) p.push(fmtNum(a.mr,1) + ' MR');
+    return p.join(' · ') || '0';
+  };
+
+  const tabla = (titulo, arr, max) => {
+    const vis = arr.slice(0, max || 6);
+    const resto = arr.length - vis.length;
+    return `<div class="dp-block">
+      <div class="dp-h">${titulo} <span class="dp-n">${arr.length}</span></div>
+      ${vis.map(([k,a]) => `
+        <div class="dp-row">
+          <span class="dp-k" title="${escHtml(k)}">${escHtml(k)}</span>
+          <span class="dp-v">${volTxt(a)}<i>${a.n} guías</i></span>
+        </div>`).join('')}
+      ${resto > 0 ? `<div class="dp-more">+ ${resto} más</div>` : ''}
+    </div>`;
+  };
+
+  const volGlobal = [];
+  if (volM3 > 0) volGlobal.push(fmtNum(volM3,2) + ' m³');
+  if (volMR > 0) volGlobal.push(fmtNum(volMR,2) + ' MR');
+
+  const entregasDia = [];
+  if (volM3 > 0) entregasDia.push(fmtNum(m3Dia,2) + ' m³/día');
+  if (volMR > 0) entregasDia.push(fmtNum(mrDia,2) + ' MR/día');
+
+  document.getElementById('dpTitulo').textContent = prov;
+  document.getElementById('dpSub').innerHTML =
+    `${rows.length} guías · ${nDias} días con recepción` +
+    (filtroActivo() ? ' · <span style="color:var(--amber)">según filtros activos</span>' : '');
+
+  document.getElementById('dpBody').innerHTML = `
+    <div class="dp-kpis">
+      <div class="dp-kpi"><span>Volumen total</span><b>${volGlobal.join('<br>') || '0'}</b></div>
+      <div class="dp-kpi"><span>Prom. entregas diarias</span><b>${fmtNum(guiasDia,1)} guías/día</b><i>${entregasDia.join(' · ')}</i></div>
+      <div class="dp-kpi"><span>Neto total</span><b>${fmtCLP(neto)}</b><i>madera: ${fmtCLP(netoMadera)}</i></div>
+    </div>
+    <div class="dp-grid">
+      ${tabla('Centro de costo', porCC)}
+      ${tabla('Planta destino', porPlanta)}
+      ${tabla('Bodega / destino', porBodega)}
+      ${tabla('Producto', porProd)}
+    </div>`;
+
+  document.getElementById('dpOverlay').style.display = 'flex';
+}
+
+// ¿Hay algún filtro aplicado?
+function filtroActivo() {
+  return FILTRO_IDS.some(k => seleccion[k].size > 0);
+}
+
+function cerrarDetalleProveedor() {
+  document.getElementById('dpOverlay').style.display = 'none';
 }
 
 function mkChart(id, type, data, options={}) {
@@ -1471,8 +1660,9 @@ function renderCharts() {
     maintainAspectRatio: false,
   });
 
-  // 5. Proveedores (horizontal bar)
+  // 5. Proveedores (horizontal bar) — clic en una barra abre el detalle
   const provTop = topN(groupSum(d, 'PROVEEDOR2'), 10);
+  const provNombres = provTop.map(e => e[0]);   // nombres completos, sin truncar
   mkChart('chartProv', 'bar', {
     labels: provTop.map(e=>e[0].length>28?e[0].slice(0,28)+'…':e[0]),
     datasets: [{
@@ -1484,7 +1674,20 @@ function renderCharts() {
     }]
   }, {
     indexAxis: 'y',
-    plugins: { legend:{display:false}, tooltip:{callbacks:{label: clpTooltipX}} },
+    onClick: (evt, elems) => {
+      if (!elems.length) return;
+      abrirDetalleProveedor(provNombres[elems[0].index]);
+    },
+    onHover: (evt, elems) => {
+      evt.native.target.style.cursor = elems.length ? 'pointer' : 'default';
+    },
+    plugins: {
+      legend:{display:false},
+      tooltip:{callbacks:{
+        label: clpTooltipX,
+        footer: () => 'Clic para ver el detalle'
+      }}
+    },
     scales: {
       x: { ticks:{color:TC.tick,font:{size:10},callback:v=>'$'+Math.round(v/1e6)+'M'}, grid:{color:TC.grid} },
       y: { ticks:{color:TC.tick,font:{size:9}}, grid:{color:TC.gridSoft} }
@@ -1996,6 +2199,20 @@ render();
      Si dejas FIREBASE_CONFIG con los valores "TU_...", la app funciona
      igual pero SOLO en modo local (sin sincronizar).
      ═══════════════════════════════════════════════════════════════════ -->
+<!-- ═══════════ DETALLE DE PROVEEDOR (drill-down) ═══════════ -->
+<div id="dpOverlay" class="dp-overlay">
+  <div class="dp-modal">
+    <div class="dp-head">
+      <div>
+        <div class="dp-title" id="dpTitulo">—</div>
+        <div class="dp-subtitle" id="dpSub"></div>
+      </div>
+      <button class="dp-close" id="dpClose" title="Cerrar">&times;</button>
+    </div>
+    <div class="dp-body" id="dpBody"></div>
+  </div>
+</div>
+
 <!-- ═══════════════ OVERLAY DE LOGIN (Firebase Auth) ═══════════════ -->
 <div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(9,12,17,0.92);backdrop-filter:blur(4px);align-items:center;justify-content:center;">
   <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:2rem 2rem 1.75rem;width:340px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,0.5);font-family:'Sora',sans-serif;color:#e6edf3;">
