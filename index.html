@@ -4,6 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Informe Gerencial — Madera & Fletes | La Cabaña Forestal</title>
+
+<!-- ═══════════ PWA: instalable en móvil y escritorio ═══════════ -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0a6ed1">
+<meta name="description" content="Informe de recepción de maderas y cierre mensual — Forestal La Cabaña Ltda.">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<!-- iOS: no lee el manifest, necesita sus propias etiquetas -->
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Maderas">
+<meta name="mobile-web-app-capable" content="yes">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2586,7 +2598,8 @@ render();
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
-    getFirestore, collection, doc, setDoc, getDocs, writeBatch
+    getFirestore, collection, doc, setDoc, getDocs, writeBatch,
+    initializeFirestore, persistentLocalCache, persistentMultipleTabManager
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
   import {
     getAuth, onAuthStateChanged, signInWithEmailAndPassword,
@@ -2623,7 +2636,23 @@ render();
   } else {
     try {
       const app  = initializeApp(FIREBASE_CONFIG);
-      const db   = getFirestore(app);
+      // Firestore con caché persistente (IndexedDB): las guías quedan
+      // guardadas en el dispositivo. Sin esto la app abriría sin señal
+      // pero mostraría el informe vacío.
+      // persistentMultipleTabManager permite tener varias pestañas abiertas
+      // sin que se peleen por el bloqueo de la caché.
+      let db;
+      try {
+        db = initializeFirestore(app, {
+          localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+        });
+      } catch (e) {
+        // Si el navegador no soporta IndexedDB (modo incógnito estricto,
+        // por ejemplo), se cae a la versión en memoria: la app funciona,
+        // pero sin datos offline.
+        console.warn('Sin persistencia offline:', e);
+        db = getFirestore(app);
+      }
       const auth = getAuth(app);
       window.FB_ENABLED = true;
 
@@ -2736,6 +2765,140 @@ render();
       console.error("Error inicializando Firebase:", e);
       window.FB_ENABLED = false;
     }
+  }
+</script>
+
+<!-- ═══════════════ PWA: service worker, offline, instalación ═══════════════ -->
+<style>
+  #netBadge {
+    position: fixed; bottom: 14px; left: 14px; z-index: 950;
+    display: none; align-items: center; gap: 7px;
+    background: #e9730c; color: #fff;
+    padding: 7px 13px; border-radius: 20px;
+    font-family: 'Sora', system-ui, sans-serif; font-size: 0.74rem; font-weight: 600;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+  }
+  #netBadge.show { display: flex; }
+  #netBadge .dot {
+    width: 7px; height: 7px; border-radius: 50%; background: #fff;
+    animation: pulso 1.6s ease-in-out infinite;
+  }
+  @keyframes pulso { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  #btnInstalar {
+    position: fixed; bottom: 14px; right: 14px; z-index: 950;
+    display: none; align-items: center; gap: 7px;
+    background: #0a6ed1; color: #fff; border: none;
+    padding: 10px 16px; border-radius: 22px;
+    font-family: 'Sora', system-ui, sans-serif; font-size: 0.78rem; font-weight: 600;
+    cursor: pointer; box-shadow: 0 8px 22px rgba(10,110,209,0.4);
+  }
+  #btnInstalar.show { display: flex; }
+  #btnInstalar:hover { background: #0854a0; }
+  @media print { #netBadge, #btnInstalar { display: none !important; } }
+</style>
+
+<div id="netBadge"><span class="dot"></span><span>Sin conexión — mostrando datos guardados</span></div>
+<button id="btnInstalar">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+  </svg>
+  Instalar app
+</button>
+
+<script>
+  // ── Registro del service worker ──
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      // updateViaCache:'none' obliga al navegador a revisar sw.js contra el
+      // servidor en vez de servirlo de su caché. Importante en GitHub Pages,
+      // que no permite fijar cabeceras Cache-Control y podría dejar la app
+      // pegada en una versión antigua.
+      navigator.serviceWorker.register('sw.js', { scope: './', updateViaCache: 'none' })
+        .then(reg => {
+          console.log('[PWA] Service worker activo.');
+          reg.update();   // busca versión nueva en cada carga
+
+          reg.addEventListener('updatefound', () => {
+            const nuevo = reg.installing;
+            nuevo && nuevo.addEventListener('statechange', () => {
+              if (nuevo.state === 'installed' && navigator.serviceWorker.controller) {
+                mostrarAvisoActualizacion();
+              }
+            });
+          });
+        })
+        .catch(err => console.warn('[PWA] No se pudo registrar el SW:', err));
+
+      // Cuando el SW nuevo toma el control, se recarga una sola vez
+      let recargando = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (recargando) return;
+        recargando = true;
+        location.reload();
+      });
+    });
+  }
+
+  // Aviso discreto cuando hay una versión nueva publicada
+  function mostrarAvisoActualizacion() {
+    if (document.getElementById('updBar')) return;
+    const bar = document.createElement('div');
+    bar.id = 'updBar';
+    bar.style.cssText = 'position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:960;' +
+      'background:#107e3e;color:#fff;padding:10px 16px;border-radius:22px;display:flex;align-items:center;gap:12px;' +
+      "font-family:'Sora',system-ui,sans-serif;font-size:0.78rem;font-weight:600;box-shadow:0 8px 22px rgba(0,0,0,0.3);";
+    bar.innerHTML = '<span>Hay una versión nueva disponible</span>' +
+      '<button style="background:#fff;color:#107e3e;border:none;border-radius:14px;padding:5px 12px;' +
+      "font-family:'Sora',sans-serif;font-size:0.74rem;font-weight:700;cursor:pointer;\">Actualizar</button>";
+    bar.querySelector('button').onclick = () => {
+      navigator.serviceWorker.getRegistration().then(reg => {
+        if (reg && reg.waiting) reg.waiting.postMessage('skipWaiting');
+        else location.reload();
+      });
+    };
+    document.body.appendChild(bar);
+  }
+
+  // ── Aviso de estado de conexión ──
+  // Firestore sirve los datos desde su caché local, así que el informe
+  // sigue funcionando; solo se avisa que lo mostrado puede no ser lo último.
+  const netBadge = document.getElementById('netBadge');
+  function revisarRed() {
+    netBadge.classList.toggle('show', !navigator.onLine);
+  }
+  window.addEventListener('online',  revisarRed);
+  window.addEventListener('offline', revisarRed);
+  revisarRed();
+
+  // ── Botón de instalación ──
+  // Chrome/Edge/Android disparan este evento cuando la app es instalable.
+  let promptInstalar = null;
+  const btnInstalar = document.getElementById('btnInstalar');
+
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();              // se pospone el diálogo del navegador
+    promptInstalar = e;
+    btnInstalar.classList.add('show');
+  });
+
+  btnInstalar.addEventListener('click', async () => {
+    if (!promptInstalar) return;
+    promptInstalar.prompt();
+    const { outcome } = await promptInstalar.userChoice;
+    console.log('[PWA] Instalación:', outcome);
+    promptInstalar = null;
+    btnInstalar.classList.remove('show');
+  });
+
+  // Ya instalada: el botón no tiene sentido
+  window.addEventListener('appinstalled', () => {
+    btnInstalar.classList.remove('show');
+    promptInstalar = null;
+  });
+  // Si ya se abre en modo app, tampoco se muestra
+  if (window.matchMedia('(display-mode: standalone)').matches) {
+    btnInstalar.classList.remove('show');
   }
 </script>
 </body>
