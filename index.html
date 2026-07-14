@@ -298,9 +298,22 @@ body {
   padding: 1.1rem 1.25rem;
   position: relative;
   overflow: hidden;
-  transition: border-color 0.2s;
+  /* cubic-bezier con leve rebote: el crecimiento se siente físico */
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.25s ease,
+              border-color 0.2s ease;
+  will-change: transform;
 }
-.kpi:hover { border-color: var(--muted); }
+.kpi:hover {
+  transform: translateY(-5px) scale(1.03);
+  border-color: var(--accent2);
+  box-shadow: 0 14px 32px rgba(0,0,0,0.35), 0 3px 8px rgba(0,0,0,0.2);
+  z-index: 5;
+}
+/* En el tema claro SAP la sombra debe ser más suave o se ve sucia */
+:root[data-theme="azul-grey"] .kpi:hover {
+  box-shadow: 0 14px 30px rgba(10,110,209,0.16), 0 3px 8px rgba(50,54,58,0.10);
+}
 .kpi::before {
   content: '';
   position: absolute;
@@ -346,6 +359,15 @@ body {
   border-left: 3px solid var(--muted);
   border-radius: 6px;
   padding: 7px 9px;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+}
+.precio-cell:hover {
+  transform: translateY(-3px) scale(1.04);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.28);
+  z-index: 3;
+}
+:root[data-theme="azul-grey"] .precio-cell:hover {
+  box-shadow: 0 8px 18px rgba(10,110,209,0.15);
 }
 .precio-cell.euca { border-left-color: var(--madera); }
 .precio-cell.pino { border-left-color: var(--amber); }
@@ -418,6 +440,11 @@ body {
   background: var(--surface2); border: 1px solid var(--border);
   border-left: 3px solid var(--accent2);
   border-radius: 6px; padding: 8px 10px;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+}
+.dp-kpi:hover {
+  transform: translateY(-3px) scale(1.03);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
 }
 .dp-kpi span {
   display: block; font-size: 0.62rem; color: var(--muted);
@@ -459,6 +486,19 @@ body {
 
 @media print { .dp-overlay { display: none !important; } }
 
+/* Sin efectos al imprimir: la elevación y las sombras ensucian el papel */
+@media print {
+  .kpi, .chart-card, .precio-cell, .dp-kpi {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+}
+/* Accesibilidad: quien pide menos movimiento no recibe animaciones */
+@media (prefers-reduced-motion: reduce) {
+  .kpi, .chart-card, .precio-cell, .dp-kpi { transition: none; }
+  .kpi:hover, .chart-card:hover, .precio-cell:hover, .dp-kpi:hover { transform: none; }
+}
+
 /* ── CHARTS GRID ── */
 .charts-grid {
   display: grid;
@@ -472,6 +512,17 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--r);
   padding: 1.25rem;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.25s ease, border-color 0.2s ease;
+}
+.chart-card:hover {
+  transform: translateY(-4px) scale(1.01);
+  border-color: var(--accent2);
+  box-shadow: 0 16px 36px rgba(0,0,0,0.32);
+  z-index: 4;
+}
+:root[data-theme="azul-grey"] .chart-card:hover {
+  box-shadow: 0 16px 34px rgba(10,110,209,0.14);
 }
 .chart-card h3 {
   font-size: 0.78rem;
@@ -1554,9 +1605,170 @@ function cerrarDetalleProveedor() {
   if (o) o.style.display = 'none';
 }
 
+// ══════════════════════════════════════════════════════════════
+//  EFECTO 3D EN LOS GRÁFICOS
+//  Chart.js es 2D. Para dar volumen sin cambiar de librería se usan:
+//   · gradientes que simulan iluminación desde arriba/izquierda
+//   · un plugin que dibuja la cara lateral y superior de cada barra
+//   · sombra proyectada bajo las series
+//  Se evita la perspectiva real: distorsionaría las alturas y haría
+//  difícil comparar valores, que es lo que el informe necesita.
+// ══════════════════════════════════════════════════════════════
+
+// Aclara u oscurece un color rgba/hex en un porcentaje
+function ajustaLuz(color, pct) {
+  let r, g, b, a = 1;
+  const m = String(color).match(/rgba?\(([^)]+)\)/);
+  if (m) {
+    const p = m[1].split(',').map(x => parseFloat(x.trim()));
+    [r, g, b] = p; if (p.length > 3) a = p[3];
+  } else {
+    const hex = String(color).replace('#','');
+    r = parseInt(hex.slice(0,2),16); g = parseInt(hex.slice(2,4),16); b = parseInt(hex.slice(4,6),16);
+  }
+  const f = v => Math.max(0, Math.min(255, Math.round(v + (pct > 0 ? (255-v)*pct : v*pct))));
+  return `rgba(${f(r)},${f(g)},${f(b)},${a})`;
+}
+
+// Gradiente vertical (barras verticales / áreas): luz arriba
+function gradV(ctx, area, color) {
+  if (!area) return color;
+  const g = ctx.createLinearGradient(0, area.top, 0, area.bottom);
+  g.addColorStop(0, ajustaLuz(color, 0.28));
+  g.addColorStop(0.5, color);
+  g.addColorStop(1, ajustaLuz(color, -0.22));
+  return g;
+}
+// Gradiente horizontal (barras horizontales): luz desde la izquierda
+function gradH(ctx, area, color) {
+  if (!area) return color;
+  const g = ctx.createLinearGradient(area.left, 0, area.right, 0);
+  g.addColorStop(0, ajustaLuz(color, -0.15));
+  g.addColorStop(0.45, color);
+  g.addColorStop(1, ajustaLuz(color, 0.30));
+  return g;
+}
+
+// Plugin: dibuja la "cara" lateral de cada barra para darle cuerpo.
+const plugin3D = {
+  id: 'efecto3d',
+  beforeDatasetsDraw(chart) {
+    const { ctx } = chart;
+    if (chart.config.type !== 'bar') return;
+    const horizontal = chart.options.indexAxis === 'y';
+    const P = 5;   // profundidad en píxeles
+
+    chart.data.datasets.forEach((ds, di) => {
+      const meta = chart.getDatasetMeta(di);
+      if (meta.hidden) return;
+      meta.data.forEach(bar => {
+        const { x, y, base } = bar;
+        const w = bar.width, h = bar.height;
+        const col = ds.borderColor || '#888';
+        ctx.save();
+        if (horizontal) {
+          // Barra horizontal: cara superior e inferior en diagonal
+          const x0 = Math.min(base, x), x1 = Math.max(base, x);
+          const yTop = y - h/2, yBot = y + h/2;
+          ctx.fillStyle = ajustaLuz(col, 0.35);            // cara superior (luz)
+          ctx.beginPath();
+          ctx.moveTo(x0, yTop); ctx.lineTo(x0 + P, yTop - P);
+          ctx.lineTo(x1 + P, yTop - P); ctx.lineTo(x1, yTop);
+          ctx.closePath(); ctx.fill();
+          ctx.fillStyle = ajustaLuz(col, -0.30);           // cara derecha (sombra)
+          ctx.beginPath();
+          ctx.moveTo(x1, yTop); ctx.lineTo(x1 + P, yTop - P);
+          ctx.lineTo(x1 + P, yBot - P); ctx.lineTo(x1, yBot);
+          ctx.closePath(); ctx.fill();
+        } else {
+          // Barra vertical: cara superior y lateral derecha
+          const yTop = Math.min(base, y), yBot = Math.max(base, y);
+          const xL = x - w/2, xR = x + w/2;
+          ctx.fillStyle = ajustaLuz(col, 0.40);            // tapa superior
+          ctx.beginPath();
+          ctx.moveTo(xL, yTop); ctx.lineTo(xL + P, yTop - P);
+          ctx.lineTo(xR + P, yTop - P); ctx.lineTo(xR, yTop);
+          ctx.closePath(); ctx.fill();
+          ctx.fillStyle = ajustaLuz(col, -0.32);           // costado derecho
+          ctx.beginPath();
+          ctx.moveTo(xR, yTop); ctx.lineTo(xR + P, yTop - P);
+          ctx.lineTo(xR + P, yBot - P); ctx.lineTo(xR, yBot);
+          ctx.closePath(); ctx.fill();
+        }
+        ctx.restore();
+      });
+    });
+  }
+};
+
+// Plugin: sombra proyectada bajo líneas y arcos (dona)
+const pluginSombra = {
+  id: 'sombra3d',
+  beforeDatasetDraw(chart, args) {
+    const t = chart.config.type;
+    if (t !== 'line' && t !== 'doughnut' && t !== 'pie') return;
+    const { ctx } = chart;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.35)';
+    ctx.shadowBlur = t === 'line' ? 8 : 14;
+    ctx.shadowOffsetX = t === 'line' ? 0 : 3;
+    ctx.shadowOffsetY = t === 'line' ? 4 : 6;
+  },
+  afterDatasetDraw(chart) {
+    const t = chart.config.type;
+    if (t !== 'line' && t !== 'doughnut' && t !== 'pie') return;
+    chart.ctx.restore();
+  }
+};
+
+if (typeof Chart !== 'undefined') {
+  Chart.register(plugin3D, pluginSombra);
+}
+
 function mkChart(id, type, data, options={}) {
   const ctx = document.getElementById(id).getContext('2d');
   if (charts[id]) charts[id].destroy();
+
+  // Los colores planos se convierten en gradientes al vuelo. Se usa una
+  // función (Chart.js la evalúa cuando ya conoce el área de dibujo, que es
+  // cuando el gradiente puede calcularse).
+  if (type === 'bar') {
+    const horizontal = options.indexAxis === 'y';
+    // La cara 3D sobresale ~5px arriba y a la derecha: se reserva ese espacio
+    options.layout = options.layout || {};
+    options.layout.padding = Object.assign({ top: 8, right: 10 }, options.layout.padding || {});
+    data.datasets.forEach(ds => {
+      const base = ds.backgroundColor;
+      if (typeof base === 'string') {
+        ds.backgroundColor = c => {
+          const { ctx: cx, chartArea } = c.chart;
+          return chartArea ? (horizontal ? gradH(cx, chartArea, base) : gradV(cx, chartArea, base)) : base;
+        };
+      }
+      ds.borderWidth = ds.borderWidth ?? 1;
+    });
+  } else if (type === 'doughnut' || type === 'pie') {
+    data.datasets.forEach(ds => {
+      ds.borderWidth = 2;
+      ds.hoverOffset = 10;     // el sector se despega al pasar el cursor
+      ds.spacing = 2;
+    });
+  } else if (type === 'line') {
+    data.datasets.forEach(ds => {
+      const base = ds.backgroundColor;
+      if (typeof base === 'string' && ds.fill) {
+        ds.backgroundColor = c => {
+          const { ctx: cx, chartArea } = c.chart;
+          if (!chartArea) return base;
+          const g = cx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+          g.addColorStop(0, ajustaLuz(base, 0.10));
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          return g;
+        };
+      }
+    });
+  }
+
   charts[id] = new Chart(ctx, { type, data, options });
 }
 
@@ -1592,22 +1804,28 @@ function renderCharts() {
     data: allDays.map(day => +volMRbyDay[day].toFixed(2)),
     borderColor: lineMR.border,
     backgroundColor: lineMR.light,
-    borderWidth: 2,
+    borderWidth: 2.5,
     pointRadius: 3,
-    pointHoverRadius: 5,
+    pointHoverRadius: 6,
+    pointBackgroundColor: lineMR.border,
+    pointBorderColor: '#fff',
+    pointBorderWidth: 1,
     fill: true,
-    tension: 0.3,
+    tension: 0.35,
   });
   if (hasM3) datasets.push({
     label: 'm³',
     data: allDays.map(day => +volM3byDay[day].toFixed(2)),
     borderColor: lineM3.border,
     backgroundColor: lineM3.light,
-    borderWidth: 2,
+    borderWidth: 2.5,
     pointRadius: 3,
-    pointHoverRadius: 5,
+    pointHoverRadius: 6,
+    pointBackgroundColor: lineM3.border,
+    pointBorderColor: '#fff',
+    pointBorderWidth: 1,
     fill: true,
-    tension: 0.3,
+    tension: 0.35,
   });
 
   mkChart('chartDiario', 'line', {
@@ -1659,7 +1877,10 @@ function renderCharts() {
       tooltip: { callbacks: { label: ctx => ctx.label+': '+ctx.parsed.toLocaleString('es-CL',{minimumFractionDigits:2,maximumFractionDigits:2}) } },
     },
     maintainAspectRatio: false,
-    cutout: '55%',
+    cutout: '52%',
+    radius: '92%',
+    rotation: -25,          // ligera rotación: da sensación de pieza física
+    animation: { animateRotate: true, animateScale: true },
   });
 
   // 4. Bodega (horizontal bar)
