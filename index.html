@@ -486,6 +486,36 @@ body {
 
 @media print { .dp-overlay { display: none !important; } }
 
+/* ── PIE DE TABLA: SUBTOTAL DE PÁGINA Y TOTAL GENERAL ── */
+#tableFoot td {
+  padding: 9px 12px;
+  border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+  background: var(--surface2);
+}
+#tableFoot .tf-sub td {
+  font-size: 0.76rem;
+  color: var(--text);
+  font-weight: 600;
+}
+#tableFoot .tf-tot td {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--surface);
+  border-top: 2px solid var(--accent);
+}
+#tableFoot .tf-tot td.num { color: var(--accent); }
+#tableFoot td.num { text-align: right; }
+#tableFoot .tf-n {
+  font-weight: 400;
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin-left: 6px;
+}
+/* El pie queda visible al desplazar la tabla horizontalmente */
+#tableFoot { position: sticky; bottom: 0; }
+
 /* Sin efectos al imprimir: la elevación y las sombras ensucian el papel */
 @media print {
   .kpi, .chart-card, .precio-cell, .dp-kpi {
@@ -973,12 +1003,13 @@ footer {
             <th onclick="sortTable('PATENTE')">Patente</th>
             <th onclick="sortTable('DESCRIPCIÓN')">Descripción</th>
             <th onclick="sortTable('CANTIDAD')" id="th-cantidad">Cantidad</th>
-            <th onclick="sortTable('COSTO UNITARIO REAL')">C. Unit</th>
+            <th onclick="sortTable('COSTO UNITARIO')">C. Unit</th>
             <th onclick="sortTable('BONOS')">Bonos Unit</th>
-            <th onclick="sortTable('NETO2')">Neto Total</th>
+            <th onclick="sortTable('NETO')">Neto Total</th>
           </tr>
         </thead>
         <tbody id="tableBody"></tbody>
+        <tfoot id="tableFoot"></tfoot>
       </table>
     </div>
     <div class="pagination">
@@ -2177,11 +2208,50 @@ function renderTable() {
       <td style="font-family:'JetBrains Mono',monospace;font-size:0.72rem">${r.PATENTE||''}</td>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="${r.DESCRIPCIÓN||''}">${(r.DESCRIPCIÓN||'').length>28?(r.DESCRIPCIÓN||'').slice(0,28)+'…':r.DESCRIPCIÓN||''}</td>
       <td class="num">${fmtNum(r.CANTIDAD,2)}</td>
-      <td class="num">${fmtCLP(r['COSTO UNITARIO REAL']||0)}</td>
+      <td class="num">${fmtCLP(r['COSTO UNITARIO']||0)}</td>
       <td class="num" style="color:var(--amber)">${fmtCLP(r.BONOS||0)}</td>
-      <td class="num" style="color:var(--accent)">${fmtCLP(r.NETO2||0)}</td>
+      <td class="num" style="color:var(--accent)">${fmtCLP(r.NETO||0)}</td>
     </tr>
   `).join('');
+
+  // ── SUBTOTAL DE PÁGINA Y TOTAL GENERAL ──
+  // El subtotal cubre solo las filas visibles; el total general, todas las
+  // filas que pasan los filtros y la búsqueda (no solo la página actual).
+  const sum = (arr, f) => arr.reduce((s,r) => s + (f(r)||0), 0);
+  const cantPag = sum(slice, r => r.CANTIDAD);
+  const netoPag = sum(slice, r => r.NETO);
+  const cantTot = sum(rows,  r => r.CANTIDAD);
+  const netoTot = sum(rows,  r => r.NETO);
+
+  // La cantidad mezcla m³ y MR: sumarlas sin distinguir daría un número sin
+  // sentido, así que se desglosa por unidad.
+  const uni = (arr) => {
+    const m3 = arr.filter(esM3).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+    const mr = arr.filter(esMR).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+    const p = [];
+    if (m3 > 0) p.push(fmtNum(m3,2) + ' m³');
+    if (mr > 0) p.push(fmtNum(mr,2) + ' MR');
+    return p.length ? p.join('<br>') : fmtNum(0,2);
+  };
+
+  const tfoot = document.getElementById('tableFoot');
+  if (tfoot) {
+    tfoot.innerHTML = `
+      <tr class="tf-sub">
+        <td colspan="7">Subtotal página ${page} <span class="tf-n">${slice.length} guías</span></td>
+        <td class="num">${uni(slice)}</td>
+        <td></td>
+        <td></td>
+        <td class="num">${fmtCLP(netoPag)}</td>
+      </tr>
+      <tr class="tf-tot">
+        <td colspan="7">TOTAL GENERAL <span class="tf-n">${total} guías${filtroActivo() || tableSearch ? ' · filtrado' : ''}</span></td>
+        <td class="num">${uni(rows)}</td>
+        <td></td>
+        <td></td>
+        <td class="num">${fmtCLP(netoTot)}</td>
+      </tr>`;
+  }
 
   document.getElementById('pag-info').textContent = `Página ${page} de ${pages} (${total} filas)`;
 
