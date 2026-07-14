@@ -339,7 +339,18 @@ body {
   font-weight: 600;
   line-height: 1.2;
   margin-bottom: 0.2rem;
+  /* Evita que un monto largo empuje el texto fuera de la tarjeta */
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 100%;
+  letter-spacing: -0.01em;
 }
+/* Escalones de tamaño según el largo del número. Los aplica ajustaKpiFont(),
+   que mide el texto real: así $3.565.363.860 encoge y $24 no. */
+.kpi-value.fit-1 { font-size: 1.25rem; }
+.kpi-value.fit-2 { font-size: 1.12rem; letter-spacing: -0.02em; }
+.kpi-value.fit-3 { font-size: 1.0rem;  letter-spacing: -0.03em; }
+.kpi-value.fit-4 { font-size: 0.9rem;  letter-spacing: -0.03em; }
 .kpi-sub {
   font-size: 0.72rem;
   color: var(--muted);
@@ -1501,8 +1512,15 @@ document.getElementById('btnReset').addEventListener('click', () => {
   applyFilters();
 });
 
-// ── Cierre del detalle de proveedor ──
-// Se comprueba la existencia de cada nodo: si faltara, un getElementById nulo
+// Al cambiar el ancho de la ventana las tarjetas se reacomodan:
+// hay que volver a medir qué montos caben.
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(ajustaTodosLosKpis, 120);
+});
+
+// ── Cierre del detalle de proveedor ──// Se comprueba la existencia de cada nodo: si faltara, un getElementById nulo
 // lanzaría una excepción que detendría el resto del script.
 (function initDetalleProveedor() {
   const btn     = document.getElementById('dpClose');
@@ -2018,6 +2036,34 @@ function renderCharts() {
 }
 
 // ── KPIs ──
+// ── AJUSTE AUTOMÁTICO DE FUENTE EN LAS TARJETAS KPI ──
+// Un monto como $3.565.363.860 no cabe con el tamaño base. En vez de adivinar
+// por cantidad de dígitos (que falla según el ancho real de la tarjeta, que
+// cambia con la pantalla), se mide si el texto desborda y se baja un escalón
+// hasta que entre.
+function ajustaKpiFont(el) {
+  if (!el) return;
+  el.classList.remove('fit-1','fit-2','fit-3','fit-4');
+  // scrollWidth > clientWidth significa que el texto no cabe
+  const escalones = ['fit-1','fit-2','fit-3','fit-4'];
+  for (let i = 0; i < escalones.length; i++) {
+    if (el.scrollWidth <= el.clientWidth + 1) return;  // ya cabe
+    el.classList.remove(...escalones);
+    el.classList.add(escalones[i]);
+  }
+}
+
+// Ajusta todas las tarjetas de una vez
+function ajustaTodosLosKpis() {
+  document.querySelectorAll('.kpi-value').forEach(el => {
+    // Las tarjetas con varias líneas (promedio diario) llevan su propio
+    // tamaño y no se miden por ancho: su contenido son bloques, no una
+    // sola línea de texto.
+    if (el.querySelector('div')) return;
+    ajustaKpiFont(el);
+  });
+}
+
 function renderKPIs() {
   const d = filtered;
   const esMadera = r => true;  // todo el archivo es madera
@@ -2156,6 +2202,10 @@ function renderKPIs() {
     : 'sin recepciones';
 
   document.getElementById('filteredCount').textContent = d.length;
+
+  // Los valores ya están en el DOM: ahora se mide cuáles desbordan.
+  // requestAnimationFrame asegura que el navegador ya calculó el layout.
+  requestAnimationFrame(ajustaTodosLosKpis);
 }
 
 function setUnitFilter(val) {
