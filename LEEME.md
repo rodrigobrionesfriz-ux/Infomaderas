@@ -154,3 +154,38 @@ URL. En iPhone el botón nunca aparece; se usa *Añadir a pantalla de inicio*.
 **Los cambios no se ven**
 Sube `VERSION` en `sw.js`. Para forzar la limpieza mientras pruebas:
 F12 → Application → Service Workers → *Unregister*, y recarga.
+
+---
+
+## 6. Actualización de datos sin duplicar (v4.8)
+
+Al cargar un Excel, cada guía se clasifica automáticamente:
+
+- **Nueva** → no existía → se agrega.
+- **Actualizada** → ya existía pero algún dato cambió → se corrige en su lugar.
+- **Sin cambios** → ya existía idéntica → se omite.
+
+Solo las nuevas y las actualizadas se escriben en Firebase. Si recargas el
+mismo archivo sin cambios, no se sube nada.
+
+**Identidad de una guía:** NÚMERO + CONCEPTO + PRODUCTO + PATENTE + FECHA.
+Estos campos no cambian nunca. Todo lo demás (cantidad, neto, bonos, centro
+de costo, bodega, etc.) se considera "contenido corregible": si lo cambias
+en el Excel, la guía se actualiza en vez de duplicarse.
+
+### Botón "Reconstruir" — usar UNA sola vez
+
+Como el criterio de identidad cambió respecto a versiones anteriores, los
+documentos que ya estaban en Firebase tienen un ID con el formato viejo. Para
+migrarlos:
+
+1. Abre la app e inicia sesión (con los datos ya cargados en pantalla).
+2. Pulsa **Reconstruir** (arriba, junto a Imprimir).
+3. Confirma dos veces.
+
+Borra la colección y la regraba con los IDs nuevos. **Hazlo una sola vez.**
+Después, las cargas normales de Excel ya funcionan con la lógica de arriba.
+
+> Antes de reconstruir, asegúrate de que lo que ves en pantalla sean todos
+> tus datos correctos: la reconstrucción deja en la nube exactamente lo que
+> tengas cargado en ese momento.

@@ -844,6 +844,10 @@ footer {
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/></svg>
       Imprimir Reporte
     </button>
+    <button class="download-btn" id="btnRebuild" onclick="reconstruirBase()" title="Reconstruir la base en Firebase (migrar IDs, quitar duplicados). Uso ocasional." style="opacity:0.6;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+      Reconstruir
+    </button>
   </div>
 </div>
 
@@ -1092,20 +1096,40 @@ function especieDe(r) {
 const ESPECIE_CLASE = { 'Eucalyptus': 'euca', 'Pino': 'pino', 'Otros': 'otro' };
 
 // ── HUELLA ÚNICA PARA DEDUPLICACIÓN ──
-// Identifica una guía de forma única. Dos filas con la misma huella se
-// consideran la MISMA guía y no se duplican al recargar el Excel mes a mes.
-// Clave: NÚMERO + FECHA + PATENTE + PRODUCTO + CANTIDAD + CONCEPTO.
-// CONCEPTO (FLETE / MADERA) distingue las dos líneas que Laudus puede emitir
-// para una misma guía; sin él, una podría descartarse como falso duplicado.
+// ── IDENTIDAD DE UNA GUÍA ──
+// Identifica de forma única una línea de guía. Solo usa campos que NO cambian:
+// número, concepto (MADERA/FLETE), producto, patente y fecha. Verificado
+// contra la base real: esta combinación es única en el 100% de las filas.
+// La CANTIDAD, el NETO, los BONOS, el CENTRO DE COSTO, etc. quedan FUERA a
+// propósito: son datos corregibles. Así, si cambias la cantidad de una guía
+// ya cargada, se reconoce como la misma y se actualiza, en vez de duplicarse.
 function rowKey(r) {
   const num   = String(r['NÚMERO'] ?? '').trim();
-  const fecha = String(r.FECHA_STR ?? '').trim();
-  const pat   = String(r.PATENTE ?? '').trim().toUpperCase();
-  const prod  = String(r.PRODUCTO ?? '').trim().toUpperCase();
-  const cant  = Number(r.CANTIDAD ?? 0).toFixed(2);
   const conc  = String(r.CONCEPTO ?? '').trim().toUpperCase();
-  return [num, fecha, pat, prod, cant, conc].join('||');
+  const prod  = String(r.PRODUCTO ?? '').trim().toUpperCase();
+  const pat   = String(r.PATENTE ?? '').trim().toUpperCase();
+  const fecha = String(r.FECHA_STR ?? '').trim();
+  return [num, conc, prod, pat, fecha].join('||');
 }
+
+// Campos que SÍ pueden cambiar entre una carga y otra. Comparar solo estos
+// permite saber si una guía ya existente fue corregida en el Excel nuevo.
+const CAMPOS_CONTENIDO = [
+  'CANTIDAD', 'NETO', 'NETO MADERA', 'BONOS', 'COSTO UNITARIO',
+  'CENTRO COSTO', 'BODEGA', 'PLANTA', 'PROVEEDOR2', 'DESCRIPCIÓN',
+  'TRANSPORTISTA', 'UM', 'MOTIVO'
+];
+
+// Huella del contenido: si dos versiones de la misma guía dan distinto
+// resultado aquí, es que algún dato cambió y hay que actualizar.
+function contentHash(r) {
+  return CAMPOS_CONTENIDO.map(c => {
+    const v = r[c];
+    if (typeof v === 'number') return c + '=' + v.toFixed(4);
+    return c + '=' + String(v ?? '').trim();
+  }).join('|');
+}
+
 // ID seguro para usar como nombre de documento en Firestore (sin / ni espacios problemáticos)
 function rowDocId(r) {
   return rowKey(r).replace(/[^A-Za-z0-9ÁÉÍÓÚÑáéíóúñ|.\-]/g, '_').slice(0, 480);
@@ -1523,6 +1547,36 @@ document.getElementById('btnReset').addEventListener('click', () => {
   FILTRO_IDS.forEach(id => { seleccion[id].clear(); cerrarCombo(id); syncComboUI(id); });
   applyFilters();
 });
+
+// ── RECONSTRUIR BASE EN FIREBASE ──
+// Migra los IDs de documento al criterio de identidad actual y elimina
+// duplicados huérfanos. Operación destructiva: pide doble confirmación.
+const btnRebuildHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg> Reconstruir';
+async function reconstruirBase() {
+  if (!window.FB_ENABLED) { alert('Firebase no está configurado.'); return; }
+  if (!allData.length) { alert('No hay datos cargados para reconstruir. Carga primero el Excel.'); return; }
+  if (!confirm(
+      'RECONSTRUIR BASE EN FIREBASE\n\n' +
+      'Esto borra todos los documentos de la nube y los vuelve a grabar con ' +
+      'los ' + allData.length + ' registros que tienes ahora cargados.\n\n' +
+      'Úsalo una sola vez, tras cambiar el criterio de identidad de las guías. ' +
+      'Asegúrate de que los datos en pantalla sean los correctos y completos.\n\n' +
+      '¿Continuar?')) return;
+  if (!confirm('Confirmación final: se BORRARÁ y regrabará toda la colección. ¿Seguro?')) return;
+
+  try {
+    const btn = document.getElementById('btnRebuild');
+    if (btn) { btn.disabled = true; btn.textContent = 'Reconstruyendo…'; }
+    const { borrados, escritas } = await window.reconstruirFirebase();
+    alert(`Base reconstruida:\n• ${borrados} documentos antiguos borrados\n• ${escritas} guías regrabadas con el ID nuevo`);
+    if (btn) { btn.disabled = false; btn.innerHTML = btnRebuildHTML; }
+  } catch (e) {
+    console.error(e);
+    alert('Error al reconstruir la base:\n' + e.message);
+    const btn = document.getElementById('btnRebuild');
+    if (btn) { btn.disabled = false; btn.innerHTML = btnRebuildHTML; }
+  }
+}
 
 // Al cambiar el ancho de la ventana las tarjetas se reacomodan:
 // hay que volver a medir qué montos caben.
@@ -2457,28 +2511,49 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
         return;
       }
 
-      // ── MERGE INCREMENTAL CON DEDUPLICACIÓN ──
-      // Se conservan los datos ya cargados y solo se añaden las guías
-      // que no existan previamente (misma huella = duplicado, se descarta).
-      const existentes = new Set(allData.map(rowKey));
-      let agregados = 0, duplicados = 0, nuevosUnicos = [];
-      const vistosEnArchivo = new Set();
+      // ══════════════════════════════════════════════════════════
+      //  MERGE INCREMENTAL CON DETECCIÓN DE CAMBIOS
+      //  Cada guía del Excel se clasifica en:
+      //   · NUEVA      → no existía → se agrega
+      //   · MODIFICADA → ya existía pero algún dato cambió → se actualiza
+      //   · IGUAL      → ya existía sin cambios → se ignora
+      //  Solo las nuevas y las modificadas se escriben en Firebase, así
+      //  no se re-sube toda la base en cada carga.
+      // ══════════════════════════════════════════════════════════
+      const indice = new Map();                 // rowKey -> {row, pos en allData}
+      allData.forEach((r, i) => indice.set(rowKey(r), { row: r, pos: i }));
+
+      let agregados = 0, modificados = 0, iguales = 0;
+      const nuevosUnicos = [];                  // guías nuevas a insertar
+      const actualizados = [];                  // guías existentes con cambios
+      const vistosEnArchivo = new Set();        // evita duplicados dentro del propio Excel
+
       nuevos.forEach(r => {
         const k = rowKey(r);
-        // Duplicado dentro del propio archivo o contra lo ya cargado
-        if (existentes.has(k) || vistosEnArchivo.has(k)) { duplicados++; return; }
+        if (vistosEnArchivo.has(k)) return;     // repetida en el mismo archivo
         vistosEnArchivo.add(k);
-        nuevosUnicos.push(r);
-        agregados++;
+
+        const prev = indice.get(k);
+        if (!prev) {
+          nuevosUnicos.push(r);
+          agregados++;
+        } else if (contentHash(prev.row) !== contentHash(r)) {
+          // Misma guía, contenido distinto: se reemplaza en su posición
+          allData[prev.pos] = r;
+          actualizados.push(r);
+          modificados++;
+        } else {
+          iguales++;
+        }
       });
 
-      if (agregados === 0) {
-        alert(`No se agregó nada: las ${nuevos.length} filas del archivo ya estaban cargadas (duplicados).`);
+      if (agregados === 0 && modificados === 0) {
+        alert(`Sin cambios: las ${nuevos.length} filas del archivo ya estaban cargadas, idénticas.`);
         this && (this.value = '');
         return;
       }
 
-      allData = allData.concat(nuevosUnicos);
+      if (nuevosUnicos.length) allData = allData.concat(nuevosUnicos);
       // Orden estable por fecha desc para consistencia visual
       allData.sort((a,b) => (a.FECHA_STR||'') < (b.FECHA_STR||'') ? 1 : (a.FECHA_STR||'') > (b.FECHA_STR||'') ? -1 : 0);
 
@@ -2488,12 +2563,19 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
       page = 1;
       render();
 
-      alert(`Carga completada:\n• ${agregados} guías nuevas agregadas\n• ${duplicados} duplicados omitidos\n• Total en base: ${allData.length} guías`);
+      alert(
+        `Carga completada:\n` +
+        `• ${agregados} guías nuevas\n` +
+        `• ${modificados} guías actualizadas (había cambios)\n` +
+        `• ${iguales} sin cambios (omitidas)\n` +
+        `• Total en base: ${allData.length} guías`
+      );
 
-      // Persistir en Firebase (si está configurado)
+      // Persistir en Firebase: solo lo nuevo y lo modificado.
       if (window.FB_ENABLED) {
-        guardarEnFirebase(nuevosUnicos)
-          .then(n => console.log(`Firebase: ${n} guías sincronizadas.`))
+        const aSincronizar = nuevosUnicos.concat(actualizados);
+        guardarEnFirebase(aSincronizar)
+          .then(n => console.log(`Firebase: ${n} guías sincronizadas (${agregados} nuevas, ${modificados} actualizadas).`))
           .catch(e => { console.error('Firebase error:', e); alert('Aviso: los datos se cargaron localmente, pero falló la sincronización con Firebase:\n' + e.message); });
       }
     } catch(err) {
@@ -2552,6 +2634,7 @@ document.getElementById('themeSelect').addEventListener('change', e => applyThem
 window.FB_ENABLED = window.FB_ENABLED || false;
 window.guardarEnFirebase = window.guardarEnFirebase || (async () => 0);
 window.cargarDesdeFirebase = window.cargarDesdeFirebase || (async () => []);
+window.reconstruirFirebase = window.reconstruirFirebase || (async () => ({ borrados: 0, escritas: 0 }));
 
 // ── INIT ──
 (function initTheme(){
@@ -2599,6 +2682,7 @@ render();
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
     getFirestore, collection, doc, setDoc, getDocs, writeBatch,
+    deleteDoc, query, limit,
     initializeFirestore, persistentLocalCache, persistentMultipleTabManager
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
   import {
@@ -2675,6 +2759,25 @@ render();
           escritas += lote.length;
         }
         return escritas;
+      };
+
+      // Reconstruye la colección: borra TODOS los documentos y regraba
+      // allData con los IDs actuales. Migra los IDs cuando cambia el
+      // criterio de identidad (huella), eliminando duplicados huérfanos.
+      window.reconstruirFirebase = async () => {
+        if (!auth.currentUser) throw new Error('Sesión no iniciada.');
+        let borrados = 0;
+        while (true) {
+          const snap = await getDocs(query(collection(db, COLECCION), limit(400)));
+          if (snap.empty) break;
+          const batch = writeBatch(db);
+          snap.forEach(d => batch.delete(d.ref));
+          await batch.commit();
+          borrados += snap.size;
+          if (snap.size < 400) break;
+        }
+        const escritas = await window.guardarEnFirebase(allData);
+        return { borrados, escritas };
       };
 
       window.cargarDesdeFirebase = async () => {
