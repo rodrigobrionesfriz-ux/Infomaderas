@@ -13,7 +13,7 @@
      sincronización.
    ══════════════════════════════════════════════════════════════ */
 
-const VERSION    = 'v4.8.0';
+const VERSION    = 'v4.9.0';
 const CACHE_APP  = 'maderas-app-' + VERSION;
 const CACHE_CDN  = 'maderas-cdn-' + VERSION;
 

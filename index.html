@@ -992,7 +992,7 @@ footer {
       </div>
     </div>
     <div class="chart-card">
-      <h3>Top Volumen por <em>Código Producto</em></h3>
+      <h3>Top Volumen por <em>Código Producto</em> <span style="font-size:0.65rem;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">· clic en una barra para ver el detalle</span></h3>
       <div class="chart-wrap" style="height:220px">
         <canvas id="chartProducto"></canvas>
       </div>
@@ -1721,6 +1721,93 @@ function cerrarDetalleProveedor() {
 }
 
 // ══════════════════════════════════════════════════════════════
+//  DETALLE DE PRODUCTO (clic en el gráfico Top Volumen por Producto)
+//  Muestra, para el producto elegido: proveedor, centro de costo,
+//  cantidad de metros y valor neto. Respeta los filtros activos.
+// ══════════════════════════════════════════════════════════════
+function abrirDetalleProducto(codigo) {
+  const rows = filtered.filter(r => String(r.PRODUCTO) === String(codigo));
+  if (!rows.length) return;
+
+  const volM3 = rows.filter(esM3).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+  const volMR = rows.filter(esMR).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+  const neto  = rows.reduce((s,r)=>s+(r.NETO||0),0);
+  const netoMadera = rows.reduce((s,r)=>s+(r['NETO MADERA']||0),0);
+
+  // Precio unitario ponderado (valor de la madera / cantidad)
+  const volTotal = volM3 + volMR;
+  const precioU = volTotal > 0 ? netoMadera / volTotal : 0;
+
+  const agrupa = (fn) => {
+    const m = new Map();
+    rows.forEach(r => {
+      const k = fn(r) || 'Sin dato';
+      const a = m.get(k) || { vol: 0, n: 0, m3: 0, mr: 0, neto: 0 };
+      a.vol += (r.CANTIDAD||0);
+      a.neto += (r.NETO||0);
+      a.n++;
+      if (esM3(r)) a.m3 += (r.CANTIDAD||0); else a.mr += (r.CANTIDAD||0);
+      m.set(k, a);
+    });
+    return [...m.entries()].sort((a,b) => b[1].vol - a[1].vol);
+  };
+
+  const porProv = agrupa(r => r.PROVEEDOR2);
+  const porCC   = agrupa(r => r['CENTRO COSTO']);
+
+  const volTxt = (a) => {
+    const p = [];
+    if (a.m3 > 0) p.push(fmtNum(a.m3,1) + ' m³');
+    if (a.mr > 0) p.push(fmtNum(a.mr,1) + ' MR');
+    return p.join(' · ') || '0';
+  };
+
+  // Tabla que muestra volumen Y neto por cada fila (lo que pediste)
+  const tabla = (titulo, arr, max) => {
+    const vis = arr.slice(0, max || 8);
+    const resto = arr.length - vis.length;
+    return `<div class="dp-block">
+      <div class="dp-h">${titulo} <span class="dp-n">${arr.length}</span></div>
+      ${vis.map(([k,a]) => `
+        <div class="dp-row">
+          <span class="dp-k" title="${escHtml(k)}">${escHtml(k)}</span>
+          <span class="dp-v">${volTxt(a)}<i>${fmtCLP(a.neto)} · ${a.n} guías</i></span>
+        </div>`).join('')}
+      ${resto > 0 ? `<div class="dp-more">+ ${resto} más</div>` : ''}
+    </div>`;
+  };
+
+  const volGlobal = [];
+  if (volM3 > 0) volGlobal.push(fmtNum(volM3,2) + ' m³');
+  if (volMR > 0) volGlobal.push(fmtNum(volMR,2) + ' MR');
+
+  // Nombre legible: código + la descripción más frecuente de ese producto
+  const descs = {};
+  rows.forEach(r => { const dd = r['DESCRIPCIÓN']; if (dd) descs[dd] = (descs[dd]||0)+1; });
+  const descTop = Object.entries(descs).sort((a,b)=>b[1]-a[1])[0];
+  const cod = String(codigo).replace(/\.0$/, '');
+
+  document.getElementById('dpTitulo').textContent =
+    descTop ? `${cod} — ${descTop[0]}` : `Producto ${cod}`;
+  document.getElementById('dpSub').innerHTML =
+    `${rows.length} guías` +
+    (filtroActivo() ? ' · <span style="color:var(--amber)">según filtros activos</span>' : '');
+
+  document.getElementById('dpBody').innerHTML = `
+    <div class="dp-kpis">
+      <div class="dp-kpi"><span>Cantidad total</span><b>${volGlobal.join('<br>') || '0'}</b></div>
+      <div class="dp-kpi"><span>Valor neto</span><b>${fmtCLP(neto)}</b><i>madera: ${fmtCLP(netoMadera)}</i></div>
+      <div class="dp-kpi"><span>Precio unitario</span><b>${fmtCLP(precioU)}</b><i>ponderado, valor madera</i></div>
+    </div>
+    <div class="dp-grid">
+      ${tabla('Proveedor', porProv)}
+      ${tabla('Centro de costo', porCC)}
+    </div>`;
+
+  document.getElementById('dpOverlay').style.display = 'flex';
+}
+
+// ══════════════════════════════════════════════════════════════
 //  EFECTO 3D EN LOS GRÁFICOS
 //  Chart.js es 2D. Para dar volumen sin cambiar de librería se usan:
 //   · gradientes que simulan iluminación desde arriba/izquierda
@@ -2058,6 +2145,7 @@ function renderCharts() {
   // 6. Producto (PRODUCTO2 → código limpio, fallback a PRODUCTO)
   const prodMap = groupSum(d, 'PRODUCTO', 'CANTIDAD');
   const prodTop = topN(prodMap, 8);
+  const prodCodigos = prodTop.map(e => e[0]);   // códigos completos, sin truncar
   // Limpiar etiquetas: "3232.0" → "3232"
   const prodLabel = v => String(v).replace(/\.0$/, '');
   mkChart('chartProducto', 'bar', {
@@ -2071,7 +2159,20 @@ function renderCharts() {
     }]
   }, {
     indexAxis: 'y',
-    plugins: { legend:{display:false}, tooltip:{callbacks:{label: ctx => fmtNum(ctx.parsed.x,2)+' m³'}} },
+    onClick: (evt, elems) => {
+      if (!elems.length) return;
+      abrirDetalleProducto(prodCodigos[elems[0].index]);
+    },
+    onHover: (evt, elems) => {
+      evt.native.target.style.cursor = elems.length ? 'pointer' : 'default';
+    },
+    plugins: {
+      legend:{display:false},
+      tooltip:{callbacks:{
+        label: ctx => fmtNum(ctx.parsed.x,2) + ' unidades',
+        footer: () => 'Clic para ver el detalle'
+      }}
+    },
     scales: {
       x: { ticks:{color:TC.tick,font:{size:10}}, grid:{color:TC.grid} },
       y: { ticks:{color:TC.tick,font:{size:10}}, grid:{color:TC.gridSoft} }
