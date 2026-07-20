@@ -1035,7 +1035,7 @@ footer {
       </div>
     </div>
     <div class="chart-card">
-      <h3>Neto por <em>Bodega / Destino</em></h3>
+      <h3>Neto por <em>Bodega / Destino</em> <span style="font-size:0.65rem;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">· clic en una barra para ver el detalle</span></h3>
       <div class="chart-wrap" style="height:220px">
         <canvas id="chartBodega"></canvas>
       </div>
@@ -1053,7 +1053,7 @@ footer {
       </div>
     </div>
     <div class="chart-card chart-full">
-      <h3>Top 10 Centros de Costo — <em>Neto CLP</em></h3>
+      <h3>Top 10 Centros de Costo — <em>Neto CLP</em> <span style="font-size:0.65rem;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">· clic en una barra para ver el detalle</span></h3>
       <div class="chart-wrap" style="height:200px">
         <canvas id="chartCC"></canvas>
       </div>
@@ -1776,6 +1776,98 @@ function cerrarDetalleProveedor() {
 }
 
 // ══════════════════════════════════════════════════════════════
+//  DETALLE GENÉRICO POR DIMENSIÓN
+//  Sirve para Bodega y Centro de Costo. Muestra proveedor, producto,
+//  planta y el resto de dimensiones relevantes, con cantidad y neto.
+//  Respeta los filtros activos, igual que los demás drill-downs.
+// ══════════════════════════════════════════════════════════════
+function abrirDetalleDim(campo, valor) {
+  const rows = filtered.filter(r => String(r[campo] || 'Sin dato') === String(valor));
+  if (!rows.length) return;
+
+  const volM3 = rows.filter(esM3).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+  const volMR = rows.filter(esMR).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+  const neto  = rows.reduce((s,r)=>s+(r.NETO||0),0);
+  const netoMadera = rows.reduce((s,r)=>s+(r['NETO MADERA']||0),0);
+  const bonos = rows.reduce((s,r)=>s+((r.BONOS||0)*(r.CANTIDAD||0)),0);
+  const volTotal = volM3 + volMR;
+  const precioU = volTotal > 0 ? netoMadera / volTotal : 0;
+
+  // Días con recepción efectiva
+  const dias = new Set(rows.filter(r => (r.CANTIDAD||0) > 0).map(r => r.FECHA_STR).filter(Boolean));
+  const nDias = dias.size;
+  const guiasDia = nDias ? rows.length / nDias : 0;
+
+  const agrupa = (fn) => {
+    const m = new Map();
+    rows.forEach(r => {
+      const k = fn(r) || 'Sin dato';
+      const a = m.get(k) || { vol: 0, n: 0, m3: 0, mr: 0, neto: 0 };
+      a.vol += (r.CANTIDAD||0);
+      a.neto += (r.NETO||0);
+      a.n++;
+      if (esM3(r)) a.m3 += (r.CANTIDAD||0); else a.mr += (r.CANTIDAD||0);
+      m.set(k, a);
+    });
+    return [...m.entries()].sort((a,b) => b[1].neto - a[1].neto);
+  };
+
+  const volTxt = (a) => {
+    const p = [];
+    if (a.m3 > 0) p.push(fmtNum(a.m3,1) + ' m³');
+    if (a.mr > 0) p.push(fmtNum(a.mr,1) + ' MR');
+    return p.join(' · ') || '0';
+  };
+
+  const tabla = (titulo, arr, max) => {
+    const vis = arr.slice(0, max || 6);
+    const resto = arr.length - vis.length;
+    return `<div class="dp-block">
+      <div class="dp-h">${titulo} <span class="dp-n">${arr.length}</span></div>
+      ${vis.map(([k,a]) => `
+        <div class="dp-row">
+          <span class="dp-k" title="${escHtml(k)}">${escHtml(k)}</span>
+          <span class="dp-v">${volTxt(a)}<i>${fmtCLP(a.neto)} · ${a.n} guías</i></span>
+        </div>`).join('')}
+      ${resto > 0 ? `<div class="dp-more">+ ${resto} más</div>` : ''}
+    </div>`;
+  };
+
+  // Los bloques a mostrar cambian según la dimensión: no tiene sentido
+  // desglosar "Bodega" dentro del detalle de una bodega.
+  const bloques = [];
+  bloques.push(tabla('Proveedor', agrupa(r => r.PROVEEDOR2)));
+  if (campo !== 'CENTRO COSTO') bloques.push(tabla('Centro de costo', agrupa(r => r['CENTRO COSTO'])));
+  if (campo !== 'BODEGA')       bloques.push(tabla('Bodega / destino', agrupa(r => r.BODEGA)));
+  bloques.push(tabla('Producto', agrupa(r => r['DESCRIPCIÓN'] || r.PRODUCTO)));
+  bloques.push(tabla('Planta destino', agrupa(r => r.PLANTA)));
+  if (campo === 'CENTRO COSTO') bloques.push(tabla('Mes', agrupa(r => etiquetaMes((r.FECHA_STR||'').slice(0,7))), 12));
+
+  const volGlobal = [];
+  if (volM3 > 0) volGlobal.push(fmtNum(volM3,2) + ' m³');
+  if (volMR > 0) volGlobal.push(fmtNum(volMR,2) + ' MR');
+
+  const titulos = { 'BODEGA': 'Bodega / destino', 'CENTRO COSTO': 'Centro de costo' };
+  document.getElementById('dpTitulo').textContent = String(valor);
+  document.getElementById('dpSub').innerHTML =
+    `${titulos[campo] || campo} · ${rows.length} guías · ${nDias} días con recepción` +
+    (filtroActivo() ? ' · <span style="color:var(--amber)">según filtros activos</span>' : '');
+
+  document.getElementById('dpBody').innerHTML = `
+    <div class="dp-kpis">
+      <div class="dp-kpi"><span>Volumen total</span><b>${volGlobal.join('<br>') || '0'}</b></div>
+      <div class="dp-kpi"><span>Neto total</span><b>${fmtCLP(neto)}</b><i>madera: ${fmtCLP(netoMadera)} · bonos: ${fmtCLP(bonos)}</i></div>
+      <div class="dp-kpi"><span>Precio unitario</span><b>${fmtCLP(precioU)}</b><i>ponderado, valor madera</i></div>
+      <div class="dp-kpi"><span>Prom. entregas diarias</span><b>${fmtNum(guiasDia,1)} guías/día</b><i>${nDias} días efectivos</i></div>
+    </div>
+    <div class="dp-grid">
+      ${bloques.join('')}
+    </div>`;
+
+  document.getElementById('dpOverlay').style.display = 'flex';
+}
+
+// ══════════════════════════════════════════════════════════════
 //  DETALLE DE PRODUCTO (clic en el gráfico Top Volumen por Producto)
 //  Muestra, para el producto elegido: proveedor, centro de costo,
 //  cantidad de metros y valor neto. Respeta los filtros activos.
@@ -2140,9 +2232,10 @@ function renderCharts() {
     animation: { animateRotate: true, animateScale: true },
   });
 
-  // 4. Bodega (horizontal bar)
+  // 4. Bodega (horizontal bar) — clic en una barra abre el detalle
   const TC = themeColors();
   const bodegaTop = topN(groupSum(d, 'BODEGA'), 7);
+  const bodegaNombres = bodegaTop.map(e => e[0]);   // nombres completos
   mkChart('chartBodega', 'bar', {
     labels: bodegaTop.map(e=>e[0]),
     datasets: [{
@@ -2154,7 +2247,17 @@ function renderCharts() {
     }]
   }, {
     indexAxis: 'y',
-    plugins: { legend:{display:false}, tooltip:{callbacks:{label: clpTooltipX}} },
+    onClick: (evt, elems) => {
+      if (!elems.length) return;
+      abrirDetalleDim('BODEGA', bodegaNombres[elems[0].index]);
+    },
+    onHover: (evt, elems) => {
+      evt.native.target.style.cursor = elems.length ? 'pointer' : 'default';
+    },
+    plugins: {
+      legend:{display:false},
+      tooltip:{callbacks:{ label: clpTooltipX, footer: () => 'Clic para ver el detalle' }}
+    },
     scales: {
       x: { ticks:{color:TC.tick,font:{size:10},callback:v=>'$'+Math.round(v/1e6)+'M'}, grid:{color:TC.grid} },
       y: { ticks:{color:TC.tick,font:{size:10}}, grid:{color:TC.gridSoft} }
@@ -2235,8 +2338,9 @@ function renderCharts() {
     maintainAspectRatio: false,
   });
 
-  // 7. Centro Costo (top 10 horizontal)
+  // 7. Centro Costo (top 10 horizontal) — clic en una barra abre el detalle
   const ccTop = topN(groupSum(d, 'CENTRO COSTO'), 10);
+  const ccNombres = ccTop.map(e => e[0]);   // nombres completos, sin truncar
   mkChart('chartCC', 'bar', {
     labels: ccTop.map(e=>e[0].length>32?e[0].slice(0,32)+'…':e[0]),
     datasets: [{
@@ -2248,7 +2352,17 @@ function renderCharts() {
     }]
   }, {
     indexAxis: 'y',
-    plugins: { legend:{display:false}, tooltip:{callbacks:{label: clpTooltipX}} },
+    onClick: (evt, elems) => {
+      if (!elems.length) return;
+      abrirDetalleDim('CENTRO COSTO', ccNombres[elems[0].index]);
+    },
+    onHover: (evt, elems) => {
+      evt.native.target.style.cursor = elems.length ? 'pointer' : 'default';
+    },
+    plugins: {
+      legend:{display:false},
+      tooltip:{callbacks:{ label: clpTooltipX, footer: () => 'Clic para ver el detalle' }}
+    },
     scales: {
       x: { ticks:{color:TC.tick,font:{size:10},callback:v=>'$'+Math.round(v/1e6)+'M'}, grid:{color:TC.grid} },
       y: { ticks:{color:TC.tick,font:{size:9}}, grid:{color:TC.gridSoft} }
