@@ -1,38 +1,126 @@
-<!DOCTYPE html>
-<html lang="es-CL">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sin conexión — Informe de Maderas</title>
-  <style>
-    body {
-      margin: 0; min-height: 100vh;
-      display: flex; align-items: center; justify-content: center;
-      background: #eff4f9; color: #32363a;
-      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-      padding: 1.5rem;
-    }
-    .box {
-      background: #fff; border: 1px solid #d9e1ea; border-radius: 10px;
-      padding: 2rem; max-width: 380px; text-align: center;
-      box-shadow: 0 10px 30px rgba(10,110,209,0.08);
-    }
-    img { width: 56px; height: 56px; border-radius: 10px; margin-bottom: 1rem; }
-    h1 { font-size: 1.05rem; margin: 0 0 .6rem; }
-    p { font-size: .85rem; color: #6a6d70; line-height: 1.6; margin: 0 0 1.3rem; }
-    button {
-      background: #0a6ed1; color: #fff; border: none; border-radius: 6px;
-      padding: 10px 22px; font-size: .85rem; font-weight: 600; cursor: pointer;
-    }
-    button:hover { background: #0854a0; }
-  </style>
-</head>
-<body>
-  <div class="box">
-    <img src="icons/icon-192.png" alt="">
-    <h1>Sin conexión</h1>
-    <p>No se pudo cargar el informe. Si ya lo habías abierto antes, vuelve a intentarlo: los datos guardados deberían aparecer.</p>
-    <button onclick="location.href='./index.html'">Reintentar</button>
-  </div>
-</body>
-</html>
+/* ══════════════════════════════════════════════════════════════
+   SERVICE WORKER — Informe de Maderas
+   Permite que la app abra y funcione sin conexión.
+
+   Estrategia:
+   · App shell (HTML, iconos, manifest) → cache-first, con
+     actualización en segundo plano. La app abre al instante.
+   · Librerías CDN (Chart.js, XLSX, fuentes) → stale-while-revalidate:
+     se sirven de caché y se refrescan por detrás.
+   · Firestore / Firebase Auth → NUNCA se cachean aquí. El SDK de
+     Firestore tiene su propia persistencia offline (IndexedDB), que
+     es la que guarda las guías. Interceptarlo aquí rompería la
+     sincronización.
+   ══════════════════════════════════════════════════════════════ */
+
+const VERSION    = 'v4.9.1';
+const CACHE_APP  = 'maderas-app-' + VERSION;
+const CACHE_CDN  = 'maderas-cdn-' + VERSION;
+
+// Recursos propios: sin ellos la app no arranca.
+const APP_SHELL = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './offline.html',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+];
+
+// Dominios cuyas respuestas NO deben pasar por caché.
+const NO_CACHE = [
+  'firestore.googleapis.com',
+  'identitytoolkit.googleapis.com',
+  'securetoken.googleapis.com',
+  'firebaseinstallations.googleapis.com',
+  'www.googleapis.com',
+];
+
+// ── INSTALACIÓN ──
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_APP)
+      .then(c => c.addAll(APP_SHELL))
+      .then(() => self.skipWaiting())   // la versión nueva toma control ya
+      .catch(err => console.error('[SW] Fallo al cachear el app shell:', err))
+  );
+});
+
+// ── ACTIVACIÓN: borra cachés de versiones anteriores ──
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(k => k !== CACHE_APP && k !== CACHE_CDN)
+            .map(k => caches.delete(k))
+      ))
+      .then(() => self.clients.claim())
+  );
+});
+
+// ── FETCH ──
+self.addEventListener('fetch', event => {
+  const req = event.request;
+  const url = new URL(req.url);
+
+  // Solo se manejan GET: un POST a Firestore jamás debe tocarse.
+  if (req.method !== 'GET') return;
+
+  // Firebase y Google APIs van directo a la red, sin intermediarios.
+  if (NO_CACHE.some(d => url.hostname.includes(d))) return;
+
+  // Navegación (abrir la app): red primero, caché como respaldo.
+  // Así se ve la versión nueva al desplegar, pero abre igual sin señal.
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      fetch(req)
+        .then(resp => {
+          const copia = resp.clone();
+          caches.open(CACHE_APP).then(c => c.put('./index.html', copia));
+          return resp;
+        })
+        .catch(async () => {
+          const cached = await caches.match('./index.html');
+          return cached || caches.match('./offline.html');
+        })
+    );
+    return;
+  }
+
+  // Librerías externas (CDN): se sirve la caché al instante y se
+  // actualiza por detrás para la próxima vez.
+  if (url.origin !== self.location.origin) {
+    event.respondWith(
+      caches.open(CACHE_CDN).then(async cache => {
+        const cached = await cache.match(req);
+        const red = fetch(req)
+          .then(resp => {
+            if (resp && resp.status === 200) cache.put(req, resp.clone());
+            return resp;
+          })
+          .catch(() => cached);
+        return cached || red;
+      })
+    );
+    return;
+  }
+
+  // Recursos propios: caché primero.
+  event.respondWith(
+    caches.match(req).then(cached => {
+      if (cached) return cached;
+      return fetch(req).then(resp => {
+        if (resp && resp.status === 200 && resp.type === 'basic') {
+          const copia = resp.clone();
+          caches.open(CACHE_APP).then(c => c.put(req, copia));
+        }
+        return resp;
+      });
+    })
+  );
+});
+
+// Permite que la página fuerce la actualización del SW
+self.addEventListener('message', e => {
+  if (e.data === 'skipWaiting') self.skipWaiting();
+});
