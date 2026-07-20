@@ -1,191 +1,3164 @@
-# Informe de Maderas — App (PWA)
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Informe Gerencial — Madera & Fletes | La Cabaña Forestal</title>
 
-Tu informe es ahora una **app instalable** en celular y escritorio, que
-funciona **sin conexión**. No necesitas instalar nada para publicarla.
+<!-- ═══════════ PWA: instalable en móvil y escritorio ═══════════ -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0a6ed1">
+<meta name="description" content="Informe de recepción de maderas y cierre mensual — Forestal La Cabaña Ltda.">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<!-- iOS: no lee el manifest, necesita sus propias etiquetas -->
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Maderas">
+<meta name="mobile-web-app-capable" content="yes">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #0d1117;
+  --surface:   #161b22;
+  --surface2:  #1c2430;
+  --border:    #30363d;
+  --accent:    #2ea043;
+  --accent2:   #388bfd;
+  --amber:     #d29922;
+  --red:       #f85149;
+  --text:      #e6edf3;
+  --muted:     #7d8590;
+  --madera:    #2ea043;
+  --flete:     #388bfd;
+  --arauco:    #bc8cff;
+  --cmpc:      #79c0ff;
+  --r: 0.75rem;
+}
 
----
+/* ── PALETA "AZUL GREY" — inspirada en SAP Fiori (Belize / Quartz Light) ── */
+:root[data-theme="azul-grey"] {
+  --bg:        #eff4f9;   /* fondo gris azulado claro Fiori */
+  --surface:   #ffffff;   /* tarjetas blancas */
+  --surface2:  #f2f5f8;   /* zonas alternas / thead */
+  --border:    #d9e1ea;   /* bordes suaves */
+  --accent:    #0a6ed1;   /* SAP Brand Blue */
+  --accent2:   #0854a0;   /* Highlight Blue oscuro */
+  --amber:     #e9730c;   /* SAP Warning Orange */
+  --red:       #bb0000;   /* SAP Negative Red */
+  --text:      #32363a;   /* SAP Text (gris azulado oscuro) */
+  --muted:     #6a6d70;   /* SAP Text secundario */
+  --madera:    #107e3e;   /* SAP Positive Green */
+  --flete:     #0a6ed1;   /* SAP Brand Blue */
+  --arauco:    #5d36ff;   /* SAP Indication púrpura */
+  --cmpc:      #0a6ed1;
+  --r: 0.5rem;            /* esquinas más sobrias, estilo SAP */
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Sora', sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+}
 
-## 1. Publicarla en GitHub Pages
+/* ── TOP BAR ── */
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 2rem;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+/* min-width:0 permite que el bloque se encoja: sin esto, un flex item
+   nunca baja de su ancho de contenido y empuja al resto fuera. */
+.topbar-left {
+  display: flex; align-items: center; gap: 1rem;
+  min-width: 0; flex: 1 1 auto;
+}
+.logo-mark {
+  width: 36px; height: 36px;
+  flex: 0 0 36px;              /* el logo nunca se comprime */
+  background: linear-gradient(135deg, var(--accent), #1a7432);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 700; color: #fff;
+  overflow: hidden;
+}
+.logo-mark img { width: 100%; height: 100%; object-fit: cover; }
+/* El título se mantiene en una línea y se corta con puntos suspensivos
+   en vez de apilarse sobre los filtros. */
+.topbar h1 {
+  font-size: 0.9rem; font-weight: 600; color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  line-height: 1.3;
+}
+.topbar h1 span { color: var(--muted); font-weight: 400; }
+/* Los botones no se encogen ni se parten */
+.topbar > div:last-child {
+  display: flex; align-items: center; gap: 0.75rem;
+  flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end;
+}
+.period-badge {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  color: var(--amber);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.upload-btn {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 7px 14px;
+  color: var(--text);
+  cursor: pointer;
+  font-family: 'Sora', sans-serif;
+  font-size: 0.8rem;
+  transition: border-color 0.2s, background 0.2s;
+}
+.upload-btn:hover { border-color: var(--accent2); background: #1c2d3f; }
+.upload-btn svg { color: var(--accent2); }
+#fileInput { display: none; }
 
-Sube estos archivos a la **raíz** de tu repositorio `sfriz-ux.github.io`:
+.theme-select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text);
+  padding: 7px 30px 7px 12px;
+  font-family: 'Sora', sans-serif;
+  font-size: 0.8rem;
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237d8590' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+.theme-select:focus { outline: none; border-color: var(--accent2); }
 
-```
-index.html
-sw.js
-manifest.webmanifest
-offline.html
-.nojekyll
-icons/            (la carpeta completa, con sus 6 imágenes)
-```
+/* En tema claro SAP, el logo-mark no debe usar el verde GitHub */
+:root[data-theme="azul-grey"] .logo-mark {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+}
 
-### Desde el navegador, sin comandos
+.download-btn {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--accent);
+  border: 1px solid #1a7432;
+  border-radius: var(--r);
+  padding: 7px 16px;
+  color: #fff;
+  cursor: pointer;
+  font-family: 'Sora', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: background 0.2s, border-color 0.2s;
+}
+.download-btn:hover { background: #1a7432; border-color: #2ea043; }
+.download-btn svg { stroke: #fff; }
 
-1. Entra a tu repositorio en GitHub.
-2. **Add file → Upload files**.
-3. Arrastra los archivos y la carpeta `icons/` completa.
-4. Escribe un mensaje de commit y pulsa **Commit changes**.
+/* ── LAYOUT ── */
+.main { padding: 1.5rem 2rem; max-width: 1400px; margin: 0 auto; }
 
-Espera 1–2 minutos y entra a **https://sfriz-ux.github.io**
+/* ── FILTERS ── */
+.filters-bar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin-bottom: 1.5rem;
+}
+.filter-group { display: flex; flex-direction: column; gap: 4px; }
+.filter-group label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+.filter-group select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 6px 28px 6px 10px;
+  font-family: 'Sora', sans-serif;
+  font-size: 0.8rem;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237d8590' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  cursor: pointer;
+  min-width: 160px;
+}
+.filter-group select:focus { outline: none; border-color: var(--accent2); }
 
-> El archivo `.nojekyll` (vacío) es necesario: sin él GitHub procesa el
-> sitio con Jekyll y puede ignorar algunos archivos. Si al arrastrarlo no
-> aparece, créalo con *Add file → Create new file* y nómbralo `.nojekyll`.
+/* ── COMBOBOX MULTI-SELECCIÓN CON BUSCADOR ── */
+.combo { position: relative; }
+.combo-box {
+  min-height: 36px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text);
+  padding: 5px 26px 5px 8px;
+  font-family: 'Sora', sans-serif;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+}
+.combo-box:hover { border-color: var(--accent2); }
+.combo.selected .combo-box { border-color: var(--accent2); }
+.combo-ph { color: var(--muted); padding: 2px 2px; }
+.chip {
+  background: var(--bg);
+  border: 1px solid var(--accent2);
+  color: var(--accent2);
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  display: inline-flex; align-items: center; gap: 4px;
+  max-width: 165px;
+}
+.chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip b { cursor: pointer; font-weight: 700; opacity: 0.75; }
+.chip b:hover { opacity: 1; color: var(--red); }
+.chip.more { border-color: var(--muted); color: var(--muted); }
+.combo-clear {
+  position: absolute; right: 8px; top: 17px; transform: translateY(-50%);
+  color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer;
+  display: none; padding: 0 2px; z-index: 2;
+}
+.combo-clear:hover { color: var(--red); }
+.combo.selected .combo-clear { display: block; }
+.combo-list {
+  display: none;
+  position: absolute; top: calc(100% + 4px); left: 0;
+  min-width: 100%; width: max-content; max-width: 400px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); z-index: 500;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+  overflow: hidden;
+}
+.combo-list.open { display: block; }
+.combo-search {
+  width: 100%; box-sizing: border-box;
+  background: var(--surface2); border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text); padding: 9px 11px;
+  font-family: 'Sora', sans-serif; font-size: 0.8rem;
+}
+.combo-search:focus { outline: none; }
+.combo-search::placeholder { color: var(--muted); }
+.combo-actions {
+  display: flex; gap: 10px; padding: 6px 11px;
+  border-bottom: 1px solid var(--border); background: var(--surface2);
+}
+.combo-actions button {
+  background: none; border: none; color: var(--accent2);
+  font-family: 'Sora', sans-serif; font-size: 0.7rem; font-weight: 600;
+  cursor: pointer; padding: 0;
+}
+.combo-actions button:hover { text-decoration: underline; }
+.combo-opts { max-height: 240px; overflow-y: auto; }
+.combo-opt {
+  padding: 7px 11px; font-size: 0.79rem; color: var(--text);
+  cursor: pointer; white-space: nowrap;
+  display: flex; align-items: center; gap: 8px;
+}
+.combo-opt:hover, .combo-opt.active { background: var(--surface2); }
+.combo-opt .cbx {
+  width: 14px; height: 14px; flex: 0 0 14px;
+  border: 1.5px solid var(--border); border-radius: 3px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; color: #fff; line-height: 1;
+}
+.combo-opt.on .cbx { background: var(--accent2); border-color: var(--accent2); }
+.combo-opt .cnt { margin-left: auto; color: var(--muted); font-size: 0.68rem; padding-left: 10px; }
+.combo-opt.empty { color: var(--muted); cursor: default; font-style: italic; }
+.combo-opt.empty:hover { background: transparent; }
+.combo-opt mark { background: transparent; color: var(--accent); font-weight: 700; }
+.filter-reset {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  padding: 6px 14px;
+  font-family: 'Sora', sans-serif;
+  font-size: 0.8rem;
+  cursor: pointer;
+  margin-top: 18px;
+  transition: color 0.2s, border-color 0.2s;
+}
+.filter-reset:hover { color: var(--text); border-color: var(--muted); }
+.filter-count {
+  margin-left: auto;
+  margin-top: 18px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+  align-self: center;
+}
+.filter-count span { color: var(--accent2); font-weight: 600; }
 
----
+/* ── KPI CARDS ── */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 1.1rem 1.25rem;
+  position: relative;
+  overflow: hidden;
+  /* cubic-bezier con leve rebote: el crecimiento se siente físico */
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.25s ease,
+              border-color 0.2s ease;
+  will-change: transform;
+}
+.kpi:hover {
+  transform: translateY(-5px) scale(1.03);
+  border-color: var(--accent2);
+  box-shadow: 0 14px 32px rgba(0,0,0,0.35), 0 3px 8px rgba(0,0,0,0.2);
+  z-index: 5;
+}
+/* En el tema claro SAP la sombra debe ser más suave o se ve sucia */
+:root[data-theme="azul-grey"] .kpi:hover {
+  box-shadow: 0 14px 30px rgba(10,110,209,0.16), 0 3px 8px rgba(50,54,58,0.10);
+}
+.kpi::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+}
+.kpi.green::before  { background: var(--accent); }
+.kpi.blue::before   { background: var(--accent2); }
+.kpi.amber::before  { background: var(--amber); }
+.kpi.purple::before { background: var(--arauco); }
+.kpi.teal::before   { background: #39d3c3; }
+.kpi-label {
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+.kpi-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.4rem;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: 0.2rem;
+  /* Evita que un monto largo empuje el texto fuera de la tarjeta */
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 100%;
+  letter-spacing: -0.01em;
+}
+/* Escalones de tamaño según el largo del número. Los aplica ajustaKpiFont(),
+   que mide el texto real: así $3.565.363.860 encoge y $24 no. */
+.kpi-value.fit-1 { font-size: 1.25rem; }
+.kpi-value.fit-2 { font-size: 1.12rem; letter-spacing: -0.02em; }
+.kpi-value.fit-3 { font-size: 1.0rem;  letter-spacing: -0.03em; }
+.kpi-value.fit-4 { font-size: 0.9rem;  letter-spacing: -0.03em; }
+.kpi-sub {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.kpi-sub b { color: var(--text); }
 
-## 2. Instalarla
+/* ── GRILLA DE PRECIO POR ESPECIE × UNIDAD ── */
+.precio-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 6px;
+  margin: 6px 0 8px;
+}
+.precio-cell {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--muted);
+  border-radius: 6px;
+  padding: 7px 9px;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+}
+.precio-cell:hover {
+  transform: translateY(-3px) scale(1.04);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.28);
+  z-index: 3;
+}
+:root[data-theme="azul-grey"] .precio-cell:hover {
+  box-shadow: 0 8px 18px rgba(10,110,209,0.15);
+}
+.precio-cell.euca { border-left-color: var(--madera); }
+.precio-cell.pino { border-left-color: var(--amber); }
+.precio-cell.otro { border-left-color: var(--muted); }
+.precio-esp {
+  font-size: 0.62rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 700;
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.precio-esp .um {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  color: var(--accent2);
+}
+.precio-val {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.precio-meta { font-size: 0.62rem; color: var(--muted); margin-top: 1px; }
+.precio-vacio { color: var(--muted); font-size: 0.78rem; padding: 8px 2px; font-style: italic; }
 
-### Android · Chrome · Edge
-Abre la URL → sale el botón **"Instalar app"** abajo a la derecha.
+/* ── DETALLE DE PROVEEDOR (drill-down) ── */
+.dp-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 900;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(3px);
+  align-items: center; justify-content: center;
+  padding: 1rem;
+}
+.dp-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  width: 100%; max-width: 760px;
+  max-height: 88vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.5);
+}
+.dp-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 1rem; padding: 1rem 1.1rem;
+  border-bottom: 1px solid var(--border);
+}
+.dp-title { font-size: 0.98rem; font-weight: 700; color: var(--text); line-height: 1.3; }
+.dp-subtitle { font-size: 0.73rem; color: var(--muted); margin-top: 3px; }
+.dp-close {
+  background: none; border: none; color: var(--muted);
+  font-size: 1.5rem; line-height: 1; cursor: pointer; padding: 0 4px;
+}
+.dp-close:hover { color: var(--red); }
+.dp-body { padding: 1rem 1.1rem 1.2rem; overflow-y: auto; }
 
-### iPhone / iPad (Safari)
-Safari no muestra botón: **Compartir** → **Añadir a pantalla de inicio**.
+.dp-kpis {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr));
+  gap: 8px; margin-bottom: 1rem;
+}
+.dp-kpi {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent2);
+  border-radius: 6px; padding: 8px 10px;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+}
+.dp-kpi:hover {
+  transform: translateY(-3px) scale(1.03);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+}
+.dp-kpi span {
+  display: block; font-size: 0.62rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; margin-bottom: 3px;
+}
+.dp-kpi b { font-size: 0.95rem; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1.3; }
+.dp-kpi i { display: block; font-style: normal; font-size: 0.66rem; color: var(--muted); margin-top: 2px; }
 
-### Escritorio (Windows / Mac)
-Chrome o Edge → el mismo botón dentro de la página, o el ícono de instalar
-en la barra de direcciones. Queda como programa, con ventana e ícono propios.
+.dp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px,1fr)); gap: 10px; }
+.dp-block {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 9px 11px;
+}
+.dp-h {
+  font-size: 0.66rem; color: var(--accent2); text-transform: uppercase;
+  letter-spacing: 0.5px; font-weight: 700; margin-bottom: 7px;
+  display: flex; align-items: center; gap: 6px;
+}
+.dp-n {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 3px; padding: 0 4px; color: var(--muted); font-size: 0.62rem;
+}
+.dp-row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  padding: 4px 0; border-bottom: 1px dashed var(--border);
+  font-size: 0.75rem;
+}
+.dp-row:last-of-type { border-bottom: none; }
+.dp-k {
+  color: var(--text); overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; flex: 1; min-width: 0;
+}
+.dp-v {
+  color: var(--text); font-weight: 600; text-align: right;
+  white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.dp-v i { display: block; font-style: normal; font-size: 0.64rem; color: var(--muted); font-weight: 400; }
+.dp-more { font-size: 0.66rem; color: var(--muted); padding-top: 5px; font-style: italic; }
 
----
+@media print { .dp-overlay { display: none !important; } }
 
-## 3. El modo sin conexión
+/* ── PIE DE TABLA: SUBTOTAL DE PÁGINA Y TOTAL GENERAL ── */
+#tableFoot td {
+  padding: 9px 12px;
+  border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+  background: var(--surface2);
+}
+#tableFoot .tf-sub td {
+  font-size: 0.76rem;
+  color: var(--text);
+  font-weight: 600;
+}
+#tableFoot .tf-tot td {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--surface);
+  border-top: 2px solid var(--accent);
+}
+#tableFoot .tf-tot td.num { color: var(--accent); }
+#tableFoot td.num { text-align: right; }
+#tableFoot .tf-n {
+  font-weight: 400;
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin-left: 6px;
+}
+/* El pie queda visible al desplazar la tabla horizontalmente */
+#tableFoot { position: sticky; bottom: 0; }
 
-Son dos capas:
-
-- **La app** (HTML, gráficos, estilos) → la guarda el *service worker*.
-- **Los datos** (las guías) → los guarda Firestore en el dispositivo
-  (IndexedDB), gracias a `persistentLocalCache`.
-
-Sin señal aparece un aviso naranja abajo a la izquierda:
-*"Sin conexión — mostrando datos guardados"*. Filtros, gráficos y KPIs
-siguen funcionando sobre lo ya descargado.
-
-**Requisito:** haber abierto la app al menos una vez **con internet** e
-iniciado sesión. Sin eso no hay nada guardado.
-
-**Limitación honesta:** si nunca iniciaste sesión, sin red no podrás
-hacerlo (Firebase Auth necesita validar la primera vez). Una vez iniciada,
-la sesión persiste y la app sí abre offline.
-
-Si cargas un Excel sin señal, Firestore encola la escritura y la sincroniza
-cuando vuelva la conexión.
-
----
-
-## 4. Actualizar la app
-
-Cuando modifiques el informe:
-
-1. Sube el número de versión en **`sw.js`**:
-
-   ```js
-   const VERSION = 'v4.7.0';   // ← cámbialo: v4.7.1, v4.8.0, etc.
-   ```
-
-2. Sube los archivos al repo de nuevo.
-
-Si no cambias `VERSION`, los usuarios seguirán viendo la versión antigua
-desde la caché. Cuando sí la cambias, a quien tenga la app abierta le
-aparece una barra verde: *"Hay una versión nueva disponible → Actualizar"*.
-
----
-
-## 5. Publicarla en Google Play
-
-Se empaqueta como **TWA** (Trusted Web Activity): un APK real que envuelve
-tu PWA. Esto sí requiere Node.js instalado.
-
-```bash
-npm install -g @bubblewrap/cli
-bubblewrap init --manifest https://sfriz-ux.github.io/manifest.webmanifest
-bubblewrap build
-```
-
-Genera un `.aab` que subes a Play Console (cuenta de desarrollador:
-USD 25, pago único).
-
-Bubblewrap te dará una **huella SHA-256**. Crea con ella el archivo
-`.well-known/assetlinks.json` en la raíz del repo:
-
-```json
-[{
-  "relation": ["delegate_permission/common.handle_all_urls"],
-  "target": {
-    "namespace": "android_app",
-    "package_name": "cl.lacabana.maderas",
-    "sha256_cert_fingerprints": ["LA_HUELLA_QUE_TE_DA_BUBBLEWRAP"]
+/* Sin efectos al imprimir: la elevación y las sombras ensucian el papel */
+@media print {
+  .kpi, .chart-card, .precio-cell, .dp-kpi {
+    transform: none !important;
+    box-shadow: none !important;
   }
-}]
-```
+}
+/* Accesibilidad: quien pide menos movimiento no recibe animaciones */
+@media (prefers-reduced-motion: reduce) {
+  .kpi, .chart-card, .precio-cell, .dp-kpi { transition: none; }
+  .kpi:hover, .chart-card:hover, .precio-cell:hover, .dp-kpi:hover { transform: none; }
+}
 
-Sin ese archivo la app abrirá mostrando la barra del navegador.
+/* ── CHARTS GRID ── */
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.chart-full { grid-column: 1 / -1; }
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 1.25rem;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.25s ease, border-color 0.2s ease;
+}
+.chart-card:hover {
+  transform: translateY(-4px) scale(1.01);
+  border-color: var(--accent2);
+  box-shadow: 0 16px 36px rgba(0,0,0,0.32);
+  z-index: 4;
+}
+:root[data-theme="azul-grey"] .chart-card:hover {
+  box-shadow: 0 16px 34px rgba(10,110,209,0.14);
+}
+.chart-card h3 {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+.chart-card h3 em { color: var(--text); font-style: normal; }
+.chart-wrap { position: relative; }
 
-### Sobre la App Store (iOS)
+/* ── TABLE ── */
+.table-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+.table-header {
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.table-header h3 {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.table-search {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 5px 10px;
+  font-family: 'Sora', sans-serif;
+  font-size: 1rem;
+  width: 220px;
+}
+.table-search:focus { outline: none; border-color: var(--accent2); }
+.table-wrap { overflow-x: auto; max-height: 420px; overflow-y: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+thead th {
+  background: var(--surface2);
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 0.65rem;
+  letter-spacing: 0.4px;
+  position: sticky;
+  top: 0;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+thead th:hover { color: var(--text); }
+tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+tbody tr:hover { background: var(--surface2); }
+tbody td { padding: 7px 12px; white-space: nowrap; color: var(--text); }
+tbody td.num {
+  text-align: right;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+}
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.badge.madera { background: rgba(46,160,67,0.15); color: var(--madera); border: 1px solid rgba(46,160,67,0.3); }
+.badge.flete  { background: rgba(56,139,253,0.15); color: var(--flete);  border: 1px solid rgba(56,139,253,0.3); }
+.badge.cmpc   { background: rgba(121,192,255,0.12); color: var(--cmpc); border: 1px solid rgba(121,192,255,0.25); }
+.badge.arauco { background: rgba(188,140,255,0.12); color: var(--arauco); border: 1px solid rgba(188,140,255,0.25); }
+.pagination {
+  padding: 0.75rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.pag-btns { display: flex; gap: 4px; }
+.pag-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 4px 10px;
+  cursor: pointer;
+  font-family: 'Sora', sans-serif;
+  font-size: 0.75rem;
+}
+.pag-btn:disabled { opacity: 0.35; cursor: default; }
+.pag-btn.active { background: var(--accent2); border-color: var(--accent2); color: #fff; }
 
-Apple rechaza con frecuencia apps que son "solo un sitio web envuelto"
-(guía 4.2, *Minimum Functionality*). Un dashboard interno cae justo en esa
-categoría: son USD 99/año, se necesita una Mac, y el rechazo es probable.
+/* ── FOOTER ── */
+footer {
+  text-align: center;
+  padding: 2rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  border-top: 1px solid var(--border);
+}
 
-Para uso interno, lo razonable en iOS es **"Añadir a pantalla de inicio"**
-desde Safari: da exactamente la misma experiencia (ícono propio, pantalla
-completa, sin barra del navegador).
+.tab-btn {
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--muted);
+  padding: 4px 12px;
+  font-family: 'Sora', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { background: var(--accent2); color: #fff; }
 
----
+/* El subtítulo es lo primero que sobra cuando falta espacio */
+@media (max-width: 1200px) {
+  .topbar h1 span { display: none; }
+}
 
-## Archivos
+@media (max-width: 900px) {
+  .charts-grid { grid-template-columns: 1fr; }
+  .chart-full { grid-column: 1; }
+  .main { padding: 1rem; }
 
-| Archivo | Para qué |
-|---|---|
-| `index.html` | El informe (la app) |
-| `manifest.webmanifest` | Nombre, íconos y colores de la app |
-| `sw.js` | Service worker: caché y modo sin conexión |
-| `offline.html` | Pantalla de respaldo sin conexión |
-| `icons/` | Íconos, generados desde tu logo |
-| `.nojekyll` | Evita que GitHub procese el sitio con Jekyll |
+  /* La barra pasa a dos filas: título arriba, botones abajo.
+     Truncar el nombre de la empresa en móvil lo dejaría ilegible. */
+  .topbar {
+    flex-wrap: wrap;
+    padding: 0.6rem 1rem;
+    gap: 0.6rem;
+  }
+  .topbar-left { flex: 1 1 100%; gap: 0.7rem; }
+  .topbar h1 { font-size: 0.82rem; white-space: normal; }
+  .topbar > div:last-child {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    gap: 0.5rem;
+  }
+  .logo-mark, .topbar-left img { height: 34px !important; }
+}
 
----
+/* Móviles angostos: botones más compactos para que quepan */
+@media (max-width: 560px) {
+  .topbar h1 { font-size: 0.76rem; }
+  .upload-btn, .download-btn {
+    font-size: 0.7rem;
+    padding: 6px 9px;
+  }
+  .period-badge { font-size: 0.65rem; padding: 4px 9px; }
+  .theme-select { font-size: 0.7rem; padding: 6px 24px 6px 8px; }
+}
 
-## Si algo falla
+@media print {
+  * { margin: 0; padding: 0; }
+  body { background: white; color: black; font-family: Arial, sans-serif; }
+  .topbar { display: none; }
+  .main { padding: 10mm; max-width: 100%; }
+  .container { max-width: 100%; margin: 0; }
+  
+  /* KPIs en 4 columnas - MUCHO MÁS GRANDES */
+  .kpi-row { 
+    display: grid; 
+    grid-template-columns: repeat(4, 1fr); 
+    gap: 12px; 
+    margin-bottom: 20px;
+    page-break-inside: avoid;
+  }
+  .kpi { 
+    padding: 12px; 
+    border: 3px solid #333; 
+    background: white;
+    text-align: center;
+  }
+  .kpi-value { 
+    font-size: 22px; 
+    font-weight: bold; 
+    margin: 6px 0;
+    color: #000;
+    line-height: 1.2;
+  }
+  .kpi-label { 
+    font-size: 12px; 
+    color: #333; 
+    font-weight: 700;
+    line-height: 1.3;
+  }
+  .kpi-sub { 
+    font-size: 9px; 
+    color: #666;
+    margin-top: 3px;
+  }
+  
+  /* Gráficos MUCHO MÁS ALTOS - Llenan la página */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 0;
+    page-break-after: always;
+    height: calc(100vh - 180px);
+  }
+  .chart-card {
+    border: 2px solid #ddd;
+    padding: 12px;
+    page-break-inside: avoid;
+    background: white;
+    display: flex;
+    flex-direction: column;
+  }
+  .chart-card h3 {
+    font-size: 15px;
+    margin: 0 0 10px 0;
+    font-weight: bold;
+    color: #000;
+  }
+  .chart-card .chart-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+  }
+  .chart-card canvas { 
+    max-height: 100% !important;
+    height: 100% !important;
+    width: 100% !important;
+  }
+  .chart-full { 
+    grid-column: 1 / -1;
+    min-height: 350px;
+  }
+  .chart-full h3 {
+    font-size: 16px;
+  }
+  
+  /* OCULTAR TABLA COMPLETAMENTE */
+  .table-card { display: none !important; }
+  .table-header { display: none !important; }
+  .table-wrap { display: none !important; }
+  .table-search { display: none !important; }
+  #printBtn { display: none !important; }
+  .tab-btn { display: none !important; }
+  .pagination { display: none !important; }
+  .footer { display: none !important; }
+  
+  /* Ajustes de página */
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+}
+</style>
+</head>
+<body>
 
-**No aparece el botón "Instalar app"**
-Debe servirse por **HTTPS** (GitHub Pages ya lo hace) y estar en la raíz.
-Abrir el archivo con doble clic (`file://`) no sirve: hay que entrar por la
-URL. En iPhone el botón nunca aparece; se usa *Añadir a pantalla de inicio*.
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOEAAADhCAMAAAAJbSJIAAABF1BMVEX///8aiSN+xiT//v////16wxsbhyLB3Zrz+uHK6M0AfA17vSfD3MAAeQf8/PwdHR0iIiLe3t4lJSVcXFxzc3PCwsJEREQsLCw+Pj7x8fGrq6vW1tYcHBz///rs7Ow0NDQ3NzdlZWWSkpK2tracnJzNzc2EhIQAAABKSkpAQECmpqaFhYW7u7sWFhaCxCVubm4AdhWu0XyNuI3x//Cewp7O4c/S37zS567n+uAthDcAbwCRxkt2rXgXjiDD3MSEvjrr+tT///Fgm2mo0XHk9ca32bhKklE/iUKZxVzZ5rGYwpgxiTLC25oTeyZ3yh3x+/LW6tmz14xQkFk8gUJIlEioz6VyqXPi9eiGv0HX89et0HVMiVSQulvFSVk9AAAOuElEQVR4nO2dDVvayBbHRxMQoUxCEogBQngXEdHW7q2updVWW7fbatt7+7J77/f/HPecmQkEjFskwaDP/PdZC2SSzC9nzsuEhwkhUlJSUlJSUlJSUlJSUlL3LFVVk+7CcqUioaIQlXDQx4erAB3iuY+QjUt1kQxsqLjuoxyvqqsolAKm6z5SRBidh89/A8J/vci4rvuICFWMMeCB5Oj58e8XRFE3cicvMqoCHyo4ZrHJQ8ZVMYS6KlWPnn3KruVfwQcbqVTuZCMDYxYBmZLuZQRxBIX89fIgOxr5hOvr66nXX07PwBsVFn8eMCK30Oabg/QaKJ1/Am8Z4fr6MPf2/Iy7I7jogxWl5PriXZ7xgbITwiHYMXd5DgMYIquSdD8XElXB0SB8vs+vCcB0ekKIgPBP7vKPMwUQk+7sXQWjjoVK9+jDn1nffqjgKOUCO0LyoOCRLEdCWZd05+cTjj1CPkP4TIP+iRAYUycfT11MHYwy6a7PJ5bqNl9CesChGUAMIUzBuyEEVhZXwYQPgZEq0NXNN7+nEW9N/PkHG8L/V+u5v89d5YEkRxhthxfvDtbCFEboK/f2j4y7onljfNVVqF2Iev3tOOsbLuiEtxAOx6ZkQQeHKmEjdnWsybqCcz+oTyj58eE4O8M1nw1ZYD35CFU5BByX1TqrElcVFgbZC/fHs+PsaNZy8xIOh+up4c+NU3d84CSxpgXDE+K9CuEzPWLhczEb8tgKgRWKBXe1RqmKtRerPm9jm58Qq/Kn5zhQV6ggh25j9QnGG/2DAecjZNkjNanKk4RSWcRjse/o2/vszci5GKEYq8NLnCaz82DBk4RLYgCFUwPi0Yfj8PS3OCGaMncJQQfmyaqayJ1WBcM5sx9Un7/0vwUIUbmfG0fcjom4JM4FoDr7fvAL34tAeAWB9WmGFeUJAEL0xOozL/wvfhsOsdhJDYe5pxh07t8P4ZTuxTvE+3V8WYQwBdXc1RV/yQKrQFy2Mf1iEcbNIVSf86MtNkrFWOUV6xkOmmXXclh7QmwDPqg+D+5gu0iEPEFCxYq3RdTlZklgo5iacPIO/b0nQjH5GJ5sZER6XB6hSzGsff5+kGVT97sbcSHCdR51rlK5n19Oz/BG8vIEF+/6QlSfdzdgBELfkKnc09P47z3y0EJx7udeP/kqsvtoIcTFCRFxiNMrDKyqmK6psXzVyr63xW8eqHr47d9zVmdLIOSYaEoIrIcYcVTfmlH9khW9wPnjw6e7p4eYCX1QCDqskItnvEKMhiDNwudotAqEUOcMhydsmoyBNXJkpXhzECfvCwaXuAmHPif78iqOL5NVCC/+5H2RBBG/DRnfOgusUM1Fz47K5//k14T9IhsxNkKBmbs8i+EL5Ff5GIbnUghBuYwSmVDZfOyEZDMf0fmWS6hGnzpu3n4LWxKuPCG/hbeZjSUVLo2QKIs7oiSUhJJQEkpCSSgJJaEklISSUBJKQkkoCSWhJJSEklASSkJJKAkloSSUhJJQEkpCSSgJJaEklISSUBJKQkkoCSWhJJSEkjAyoUt8wjhAV4swncbVzFx1A3/Ygz+0e3yEa2sHr4h69kWsZhaHVotwbbT2+xNX4TaMSStGmH/37RoiTWbjJPcYCbPZN09c9pNBRc28uMw9mkgjdsx+evmXv1aAoiju2fnb3JgwQtBJlJDvhb+3GR0cfzhSg4shqK57ffr09TDFf9o7XNgzk7Yh/0Hmwfvnh+r0EjoqxYXZMhs/U7jkXoThmigh+z37aJR/9+Q65CfJuPAgOuRJKpI7JmtDsODBwctNttzSzPqdKl/qUlXIlEM+LELYI3v87AcuVsBYpoYpWzdIwZijEhcccmFDJkIoluNJH7z/djTHuRWwZubjT5Eh7xpykrIhMH76+upQpZT+8uw4XClmyGFqgVIuGcI0Zr/PKqFzLXngugomSHUxh7x/wjSE0PwnyH6cbg5EVaz8Rtyz06e51NXdKJMgzL//doirfFKizoUolikhuLSIe7rxc3gnxPsj5IvNro3yX19h2KRiOdl5fknuL8Gi4uq1auaPk7sw3qcNcX4L2Y+tAr3wGTHwMIe8mjOs3hMhFmcjlv34Q0gWp0P3hbDDM+Q8prwnwhEUaFl0P/YQkggWVPmipSo5y3yZbw55P4RYnX29uB6v1RNhtRG+bDmu56dkPgLjLycd90OYPfj+m0pZz9z54uetJyT8UTusysMqIDX8xczjHgjTB5/A/VzRNr6V1Hi9fvr363U+h0ylQu25ZMJ0epR///yarRUf+wpjfOle9Qgy5JCt3H7vhLjeUPbrxSGZM+3dUfyoaEccrOEGXLYNofjcxJDAFqNazmqNbAlBkSHD/XGJhJD9PsPUj4oBuqz1KHGhW9el7jm/qXMvhKw8y//5/JAtI8xmsmw59tigpnugshqJwjx5YzxPTi2DMOiAa/l3kP2WukBjWF9gnnzpVwFjt4yVkBkPi8/vm0msPq26Cjl7cTkzh4yTkC/nmf3z2RF7gkVsPZ9TmJIwqmHJKlbfXcYoheLzyE3mOYZ400plt8szGz8nXwnEGWmg+HwH2Q9XYU/qUY18eXZVfO0RByHXJl9w9tObzWtWNN5vhJmWWKfZPWQOCbEVCaM+10QBQsjuz/5anUfc4Er3Z+d/v8bHmhxGt6G6mc8ffztkM5p4OhhdUANA5Dn98jqVwxXbo1763/57gXPb1XmeBp+kQTyAkvV/GSUyIT4yTGFPZFyd5/iIG5Bw1Q+pErkoVlT+BIaE4meYFPbIM3bLAyur1bnydxelRETuJAP4UsXB6KPlA1WsnlUhpN11ku7JUkRJec/WDN3aN7ZbSXdmKaK0XrU63aqu7TWT7sutiuJBsK/Th38r5XJhuaGmWK6Fnr95u28U+l1rF/o1pcpkpFHaKoNarQqhU52nzcC7fvAAg/L4dHS6WXSZ24Owjwvb5Vt26JhV3dB1vdqoBD/etyeva9uGrmm6Vi0VpwiL28XADluBa1jfrgSbdebt/TwytWLYx127F95+F8JDo91umlUb/Gfc/4KuT45T070GyNTtvUAMoaRhNyZ7WEbgTakaIDShWYwKJ6zt1bXiTfegxNL1Lh/WNXhpjbd0bc8cv3GMPbarY9lawAcqel2f+JzlGd1xMixplWAzbcYFIimcsGnbXuMGISVtXR+wF7ipvz3wW9Rsz5t00jE0MQJNvT3Zfd+z7e74nWV7ep+EEO7bXqBZdIUQUuoYRts2CjdsWDD08pibkol9moZp2WOLgg0d3qIPZvbbF3S7bRjjfSx7y6sWhRV9Qiqa6THWADcJ4Zxto0caxs0LuWuYAcNOXjmeXuxo4xEpCCnusDtu1AXH6xljm1p6v+EZYjgGbNg19oPNoitslNK63iJF3a7NGJFu6aFhCUxVotAtP3M7OvdD0tEnR3eqWoeUddt3PUsrO55d4sYa25DWWDPDiy9hhNiQtKAfhN68kAXNDhs9lHoweEnL8BzeL0c3WoNWq2zp9v74oE2MzmDsljA+EJJC1eaDYjJKmzhMHFsLzWExEQIbCwEtw57Z0NFKIUfAlpDbBCfKgaAJ6VCH8NN0hM1Ep5u6n4WQkBSr3BfGo9Qx0DeB85ZktYBCCAc6MxX1jJmKuAjdCxs9dYyYGFbEZpEPGz3bsHvCOfv6DrKyQchksevRN9jVHBNiBODNKiEnWkg3CCkxhUO18XoHiSpaPQywqHls8NZsnefQmi6yhTOoi2FItwxuYAsCyXiUwquujR3wCZ26LZpNInNUzRJSCA9egaJqdnW6fHJsPSwV4xXB9ixaMlS96vtrwWMJFFy77rCDVnS9ECSkpg353a9pwJepaGbElfVvEja8emkLVap7+9ObOMvMETqat7OD7Xd26vwKTAjBo/QucvS8+o44qM0TCBLCoWhty95yetyG2Mw/t90M9YjohFA0eVpVA1Wr8Gp64lHUEGF8d8VhrxuervH2msGLkYANSVnD4QapR/Pl8YDMbIgqGF6jx20Izfxj6Z4fmWMntOxGwZcJCTtwGgpDasfhn4Apa3YX/lYgdvjtW1CM0GkbmpBz8O/u+KAlox8ghObFPa+ONpxppt82u4lIWAhGsSJG1WARU7PtHX9zp27bNXZFJnvzHBqwYdvAKrqjT6o1yPolSgI2xDhb1/GoHS3QrG+EpaYFZBr9ilAHnahrTOYIEMX59Z58UPAMY79YqBUGDcPYqrFSNRDXW7rHCPUOHq9TNo0qIk9VgI5nDKYIMUSxgzTsqWa3FFB3JvQM4R/6XiOYr5jE9Q4g1hqaAf6mwyzYQkN1p0vVehVyaE3jrgnzZAOzHcbPwCGaGl5EqzomhNG/VyHTzQivbmIg3C+VelylHbiCrboZ3OqUvBuZt9It2bbd2xXRrz6VUdp1C8NjiR21ZLbZqGt7U8mttlWHj3e9QD3h2B3ctxtEKkCzJO6l8qltDXvu541J/qB0+j0hIVYQjaYb3hI3YyAMRkqWnqYPyu68z84wZnel09tuTq9mUii9eSbRYurSYLPHfD9cSuquosEYMu1oM2GGN6azzkrDvHaVNGe3Zi7Aw1KnCWIxnRbaVl/YpN1slrnB2Hb+4aC7W2SftZvwH9+94pdxzcJSH70dQeVeq1xmBIWt3UHDxJcK6TVbDZ6my6a/vVhq9U0HMVr9UrvME4PpFzBbnSg/aVimWmatwO1g4R2AHhYkQNghHX7rotVwanz7oDco4BNqEcxjNQ0lg1JPGLG0uoQ90+Q3N8wB3t3H0acQ02qabU7YM3u4HbBajR2zxigcQUjNoiWG6woTNvx42G7gFINXo2aza/LipIW3A5ibOgUclEFC0trq7ouJZSm2O0xxqzyuyJ190ypxw5FSkZr8bkO5ZFn7bCQW6/vWlrixxCcLTqk/KFr85kWpYTXimRXFK7DaZApBOy3/XkanRmpFfqOtA+JGrg1aBZE+/W048efxFZuFfSe7urot+z3ArBg2JaI3ZyO37/sAmaWkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkHpH+D0zXuc5MnPlCAAAAAElFTkSuQmCC" alt="La Cabaña Forestal" style="height:42px;width:auto;object-fit:contain;background:#fff;border-radius:7px;padding:3px;box-shadow:0 1px 4px rgba(0,0,0,0.18);">
+    <h1 title="Soc. Agrícola y Forestal La Cabaña Ltda. / Informe de Maderas · Cierre Mensual">Soc. Agrícola y Forestal La Cabaña Ltda. <span>/ Informe de Maderas &nbsp;·&nbsp; Cierre Mensual</span></h1>
+  </div>
+  <div style="display:flex;align-items:center;gap:0.75rem;">
+    <div class="period-badge" id="periodBadge">FEB 2026</div>
+    <div class="filter-group" style="gap:0;">
+      <select id="themeSelect" class="theme-select" title="Paleta de colores">
+        <option value="">Tema: GitHub Dark</option>
+        <option value="azul-grey">Tema: Azul Grey (SAP)</option>
+      </select>
+    </div>
+    <label class="upload-btn">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Actualizar Excel
+      <input type="file" id="fileInput" accept=".xlsx,.xls">
+    </label>
+    <button class="download-btn" id="btnDescargar" onclick="descargarDashboard()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Descargar
+    </button>
+    <button class="download-btn" id="printBtn" onclick="printReport()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/></svg>
+      Imprimir Reporte
+    </button>
+    <button class="download-btn" id="btnRebuild" onclick="reconstruirBase()" title="Reconstruir la base en Firebase (migrar IDs, quitar duplicados). Uso ocasional." style="opacity:0.6;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+      Reconstruir
+    </button>
+  </div>
+</div>
 
-**Los cambios no se ven**
-Sube `VERSION` en `sw.js`. Para forzar la limpieza mientras pruebas:
-F12 → Application → Service Workers → *Unregister*, y recarga.
+<!-- MAIN -->
+<div class="main">
 
----
+  <!-- FILTERS -->
+  <div class="filters-bar">
+    <div class="filter-group">
+      <label>Mes</label>
+      <div class="combo" id="combo-mes">
+        <div class="combo-box" id="cb-mes"><span class="combo-ph">Todos</span></div>
+        <span class="combo-clear" id="cx-mes" title="Limpiar">&times;</span>
+        <div class="combo-list" id="cl-mes"></div>
+      </div>
+    </div>
+    <div class="filter-group">
+      <label>Planta destino</label>
+      <div class="combo" id="combo-planta">
+        <div class="combo-box" id="cb-planta"><span class="combo-ph">Todas</span></div>
+        <span class="combo-clear" id="cx-planta" title="Limpiar">&times;</span>
+        <div class="combo-list" id="cl-planta"></div>
+      </div>
+    </div>
+    <div class="filter-group">
+      <label>Bodega / Destino</label>
+      <div class="combo" id="combo-bodega">
+        <div class="combo-box" id="cb-bodega"><span class="combo-ph">Todas</span></div>
+        <span class="combo-clear" id="cx-bodega" title="Limpiar">&times;</span>
+        <div class="combo-list" id="cl-bodega"></div>
+      </div>
+    </div>
+    <div class="filter-group">
+      <label>Proveedor</label>
+      <div class="combo" id="combo-proveedor">
+        <div class="combo-box" id="cb-proveedor"><span class="combo-ph">Todos</span></div>
+        <span class="combo-clear" id="cx-proveedor" title="Limpiar">&times;</span>
+        <div class="combo-list" id="cl-proveedor"></div>
+      </div>
+    </div>
+    <div class="filter-group">
+      <label>Rol</label>
+      <div class="combo" id="combo-rol">
+        <div class="combo-box" id="cb-rol"><span class="combo-ph">Todos</span></div>
+        <span class="combo-clear" id="cx-rol" title="Limpiar">&times;</span>
+        <div class="combo-list" id="cl-rol"></div>
+      </div>
+    </div>
+    <div class="filter-group">
+      <label>Centro Costo</label>
+      <div class="combo" id="combo-cc">
+        <div class="combo-box" id="cb-cc"><span class="combo-ph">Todos</span></div>
+        <span class="combo-clear" id="cx-cc" title="Limpiar">&times;</span>
+        <div class="combo-list" id="cl-cc"></div>
+      </div>
+    </div>
+    <button class="filter-reset" id="btnReset">&#x21BA; Limpiar</button>
+    <div class="filter-count">Mostrando <span id="filteredCount">0</span> guías</div>
+  </div>
 
-## 6. Actualización de datos sin duplicar (v4.8)
+  <!-- KPIs -->
+  <div class="kpis">
+    <div class="kpi green">
+      <div class="kpi-label">Neto Total</div>
+      <div class="kpi-value" id="kpi-neto">$0</div>
+      <div class="kpi-sub" id="kpi-neto-sub">— guías</div>
+    </div>
+    <div class="kpi" style="border-top:0;border-left:2px solid #2ea043;">
+      <div class="kpi-label" style="color:#2ea043;">Neto Madera</div>
+      <div class="kpi-value" id="kpi-neto-madera">$0</div>
+      <div class="kpi-sub" id="kpi-neto-madera-sub">neto sin bonos</div>
+    </div>
+    <div class="kpi" style="border-top:0;border-left:2px solid #f85149;">
+      <div class="kpi-label" style="color:#f85149;">Monto Bonos</div>
+      <div class="kpi-value" id="kpi-bonos">$0</div>
+      <div class="kpi-sub" id="kpi-bonos-sub">total bonificación</div>
+    </div>
+    <div class="kpi" style="border-top:0;border-left:2px solid #79c0ff;">
+      <div class="kpi-label" style="color:#79c0ff;">Costo Fletes</div>
+      <div class="kpi-value" id="kpi-neto-flete">$0</div>
+      <div class="kpi-sub" id="kpi-neto-flete-sub">— guías · transporte a planta</div>
+    </div>
+    <div class="kpi blue">
+      <div class="kpi-label">Volumen m³</div>
+      <div class="kpi-value" id="kpi-vol">0</div>
+      <div class="kpi-sub" id="kpi-vol-sub">metros cúbicos</div>
+    </div>
+    <div class="kpi" style="border-top:0;border-left:2px solid #f0883e;">
+      <div class="kpi-label" style="color:#f0883e;">Volumen MR</div>
+      <div class="kpi-value" id="kpi-mr">0</div>
+      <div class="kpi-sub" id="kpi-mr-sub">metros ruma</div>
+    </div>
+    <div class="kpi amber">
+      <div class="kpi-label">Proveedores Activos</div>
+      <div class="kpi-value" id="kpi-madera">0</div>
+      <div class="kpi-sub" id="kpi-madera-sub">proveedores únicos</div>
+    </div>
+    <div class="kpi purple">
+      <div class="kpi-label">Centros de Costo</div>
+      <div class="kpi-value" id="kpi-flete">0</div>
+      <div class="kpi-sub" id="kpi-flete-sub">faenas activas</div>
+    </div>
+    <div class="kpi teal" id="kpi-card-prom" style="grid-column:span 2;">
+      <div class="kpi-label">Precio Unitario Madera — por Especie</div>
+      <div class="precio-grid" id="precio-grid"></div>
+      <div class="kpi-sub" id="kpi-prom-sub">ponderado por volumen · valor madera sin bonos</div>
+    </div>
+    <div class="kpi" style="border-top:0;border-left:2px solid #79c0ff;">
+      <div class="kpi-label" style="color:#79c0ff;">Promedio Diario Recepción</div>
+      <div class="kpi-value" id="kpi-prom-dia">0</div>
+      <div class="kpi-sub" id="kpi-prom-dia-sub">— días efectivos</div>
+    </div>
+  </div>
 
-Al cargar un Excel, cada guía se clasifica automáticamente:
+  <!-- Control de cuadratura del neto -->
+  <div id="kpi-cuadratura" style="font-size:0.72rem;margin:-0.5rem 0 1rem;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-family:'JetBrains Mono',monospace;"></div>
 
-- **Nueva** → no existía → se agrega.
-- **Actualizada** → ya existía pero algún dato cambió → se corrige en su lugar.
-- **Sin cambios** → ya existía idéntica → se omite.
+  <!-- CHARTS ROW 1 -->
+  <div class="charts-grid">
+    <div class="chart-card chart-full">
+      <h3>Evolución diaria — <em>Volumen por UM</em></h3>
+      <div class="chart-wrap" style="height:200px">
+        <canvas id="chartDiario"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>Volumen por <em>Planta Destino</em></h3>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="chartPlanta"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>Neto por <em>Bodega / Destino</em></h3>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="chartBodega"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>Top proveedores — <em>Neto CLP</em> <span style="font-size:0.65rem;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">· clic en una barra para ver el detalle</span></h3>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="chartProv"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>Top Volumen por <em>Código Producto</em> <span style="font-size:0.65rem;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">· clic en una barra para ver el detalle</span></h3>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="chartProducto"></canvas>
+      </div>
+    </div>
+    <div class="chart-card chart-full">
+      <h3>Top 10 Centros de Costo — <em>Neto CLP</em></h3>
+      <div class="chart-wrap" style="height:200px">
+        <canvas id="chartCC"></canvas>
+      </div>
+    </div>
+  </div>
 
-Solo las nuevas y las actualizadas se escriben en Firebase. Si recargas el
-mismo archivo sin cambios, no se sube nada.
+  <!-- TABLE -->
+  <div class="table-card">
+    <div class="table-header">
+      <h3>Detalle de Guías</h3>
+      <div style="display:flex;align-items:center;gap:0.75rem;">
+        <div style="display:flex;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px;">
+          <button class="tab-btn active" id="tab-all" onclick="setUnitFilter('')">Todos</button>
+          <button class="tab-btn" id="tab-m3"  onclick="setUnitFilter('m3')">m³</button>
+          <button class="tab-btn" id="tab-mr"  onclick="setUnitFilter('mr')">MR</button>
+        </div>
+        <input type="text" class="table-search" id="tableSearch" placeholder="Buscar proveedor, patente, CC...">
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortTable('NÚMERO')">N° Guía</th>
+            <th onclick="sortTable('FECHA_STR')">Fecha</th>
+            <th onclick="sortTable('PLANTA')">Planta</th>
+            <th onclick="sortTable('BODEGA')">Bodega</th>
+            <th onclick="sortTable('PROVEEDOR')">Proveedor</th>
+            <th onclick="sortTable('PATENTE')">Patente</th>
+            <th onclick="sortTable('DESCRIPCIÓN')">Descripción</th>
+            <th onclick="sortTable('CANTIDAD')" id="th-cantidad">Cantidad</th>
+            <th onclick="sortTable('COSTO UNITARIO')">C. Unit</th>
+            <th onclick="sortTable('BONOS')">Bonos Unit</th>
+            <th onclick="sortTable('NETO')">Neto Total</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+        <tfoot id="tableFoot"></tfoot>
+      </table>
+    </div>
+    <div class="pagination">
+      <span id="pag-info">Página 1 de 1</span>
+      <div class="pag-btns">
+        <button class="pag-btn" id="btnPrev" onclick="changePage(-1)">&#8249;</button>
+        <div id="pagNums" style="display:flex;gap:4px;"></div>
+        <button class="pag-btn" id="btnNext" onclick="changePage(1)">&#8250;</button>
+      </div>
+    </div>
+  </div>
 
-**Identidad de una guía:** NÚMERO + CONCEPTO + PRODUCTO + PATENTE + FECHA.
-Estos campos no cambian nunca. Todo lo demás (cantidad, neto, bonos, centro
-de costo, bodega, etc.) se considera "contenido corregible": si lo cambias
-en el Excel, la guía se actualiza en vez de duplicarse.
+</div>
 
-### Botón "Reconstruir" — usar UNA sola vez
+<footer>Forestal La Cabaña Ltda. &nbsp;·&nbsp; Informe Gerencial Madera</footer>
 
-Como el criterio de identidad cambió respecto a versiones anteriores, los
-documentos que ya estaban en Firebase tienen un ID con el formato viejo. Para
-migrarlos:
+<!-- ═══════════ DETALLE DE PROVEEDOR (drill-down) ═══════════ -->
+<div id="dpOverlay" class="dp-overlay">
+  <div class="dp-modal">
+    <div class="dp-head">
+      <div>
+        <div class="dp-title" id="dpTitulo">—</div>
+        <div class="dp-subtitle" id="dpSub"></div>
+      </div>
+      <button class="dp-close" id="dpClose" title="Cerrar">&times;</button>
+    </div>
+    <div class="dp-body" id="dpBody"></div>
+  </div>
+</div>
 
-1. Abre la app e inicia sesión (con los datos ya cargados en pantalla).
-2. Pulsa **Reconstruir** (arriba, junto a Imprimir).
-3. Confirma dos veces.
+<script>
+// ── EMBEDDED DATA ──
+const EMBEDDED_DATA = [];  // Vacío: todos los datos provienen de Firestore tras iniciar sesión.
+// ── STATE ──
+let allData = [...EMBEDDED_DATA];
+let filtered = [...allData];
+let sortKey = 'FECHA_STR';
+let sortDir = -1;
+let page = 1;
+const PAGE_SIZE = 20;
+let tableSearch = '';
+let unitFilter  = '';  // '' | 'm3' | 'mr'
 
-Borra la colección y la regraba con los IDs nuevos. **Hazlo una sola vez.**
-Después, las cargas normales de Excel ya funcionan con la lógica de arriba.
+// Clasificadores de unidad — globales para uso en KPIs, gráficos y tabla
+const esM3 = r => r.UM === 'm3';
+const esMR = r => r.UM !== 'm3';
 
-> Antes de reconstruir, asegúrate de que lo que ves en pantalla sean todos
-> tus datos correctos: la reconstrucción deja en la nube exactamente lo que
-> tengas cargado en ese momento.
+// ── DETECCIÓN DE ESPECIE ──
+// La especie no viene como campo propio: se infiere de DESCRIPCIÓN / PRODUCTO.
+// Ej: "MR EUCA GLOB 3,50 C/C", "EUCALYPTUS NITENS 3.50", "PINO PULPABLE 2.44"
+function especieDe(r) {
+  const t = ((r['DESCRIPCIÓN'] || '') + ' ' + (r.PRODUCTO || '') + ' ' + (r.CONCEPTO || '')).toUpperCase();
+  if (/\bPINO\b|PINUS|\bRADIATA\b/.test(t)) return 'Pino';
+  if (/EUCA|NITENS|GLOBULUS/.test(t))       return 'Eucalyptus';
+  return 'Otros';
+}
+const ESPECIE_CLASE = { 'Eucalyptus': 'euca', 'Pino': 'pino', 'Otros': 'otro' };
+
+// ── HUELLA ÚNICA PARA DEDUPLICACIÓN ──
+// ── IDENTIDAD DE UNA GUÍA ──
+// Identifica de forma única una línea de guía. Solo usa campos que NO cambian:
+// número, concepto (MADERA/FLETE), producto, patente y fecha. Verificado
+// contra la base real: esta combinación es única en el 100% de las filas.
+// La CANTIDAD, el NETO, los BONOS, el CENTRO DE COSTO, etc. quedan FUERA a
+// propósito: son datos corregibles. Así, si cambias la cantidad de una guía
+// ya cargada, se reconoce como la misma y se actualiza, en vez de duplicarse.
+function rowKey(r) {
+  const num   = String(r['NÚMERO'] ?? '').trim();
+  const conc  = String(r.CONCEPTO ?? '').trim().toUpperCase();
+  const prod  = String(r.PRODUCTO ?? '').trim().toUpperCase();
+  const pat   = String(r.PATENTE ?? '').trim().toUpperCase();
+  const fecha = String(r.FECHA_STR ?? '').trim();
+  return [num, conc, prod, pat, fecha].join('||');
+}
+
+// Campos que SÍ pueden cambiar entre una carga y otra. Comparar solo estos
+// permite saber si una guía ya existente fue corregida en el Excel nuevo.
+const CAMPOS_CONTENIDO = [
+  'CANTIDAD', 'NETO', 'NETO MADERA', 'BONOS', 'COSTO UNITARIO',
+  'CENTRO COSTO', 'BODEGA', 'PLANTA', 'PROVEEDOR2', 'DESCRIPCIÓN',
+  'TRANSPORTISTA', 'UM', 'MOTIVO'
+];
+
+// Huella del contenido: si dos versiones de la misma guía dan distinto
+// resultado aquí, es que algún dato cambió y hay que actualizar.
+function contentHash(r) {
+  return CAMPOS_CONTENIDO.map(c => {
+    const v = r[c];
+    if (typeof v === 'number') return c + '=' + v.toFixed(4);
+    return c + '=' + String(v ?? '').trim();
+  }).join('|');
+}
+
+// ID seguro para usar como nombre de documento en Firestore (sin / ni espacios problemáticos)
+function rowDocId(r) {
+  return rowKey(r).replace(/[^A-Za-z0-9ÁÉÍÓÚÑáéíóúñ|.\-]/g, '_').slice(0, 480);
+}
+
+// Chart instances
+let charts = {};
+
+// ── SISTEMA DE TEMAS / PALETAS ──
+// Colores de gráficos por tema. 'default' = GitHub Dark; 'azul-grey' = SAP Fiori.
+const THEME_CHART_COLORS = {
+  default: {
+    grid:      'rgba(255,255,255,0.06)',
+    gridSoft:  'rgba(255,255,255,0.04)',
+    tick:      '#7d8590',
+    bodega:    { fill:'rgba(56,139,253,0.6)',  border:'#388bfd' },
+    prov:      { fill:'rgba(210,153,34,0.6)',  border:'#d29922' },
+    producto:  { fill:'rgba(188,140,255,0.6)', border:'#bc8cff' },
+    cc:        { fill:'rgba(57,211,195,0.55)', border:'#39d3c3' },
+    plantas: [
+      { solid:'rgba(121,192,255,0.90)', light:'rgba(121,192,255,0.40)', border:'#79c0ff' },
+      { solid:'rgba(188,140,255,0.90)', light:'rgba(188,140,255,0.40)', border:'#bc8cff' },
+      { solid:'rgba(240,136,62,0.90)',  light:'rgba(240,136,62,0.40)',  border:'#f0883e' },
+      { solid:'rgba(46,160,67,0.90)',   light:'rgba(46,160,67,0.40)',   border:'#2ea043' },
+      { solid:'rgba(210,153,34,0.90)',  light:'rgba(210,153,34,0.40)',  border:'#d29922' },
+      { solid:'rgba(56,139,253,0.90)',  light:'rgba(56,139,253,0.40)',  border:'#388bfd' },
+      { solid:'rgba(248,81,73,0.90)',   light:'rgba(248,81,73,0.40)',   border:'#f85149' },
+      { solid:'rgba(63,185,80,0.90)',   light:'rgba(63,185,80,0.40)',   border:'#3fb950' },
+    ]
+  },
+  'azul-grey': {
+    // Paleta SAP Fiori "Belize" — azules, teal, morado indicación, naranja, verde
+    grid:      'rgba(50,54,58,0.10)',
+    gridSoft:  'rgba(50,54,58,0.06)',
+    tick:      '#6a6d70',
+    bodega:    { fill:'rgba(10,110,209,0.65)',  border:'#0a6ed1' },
+    prov:      { fill:'rgba(233,115,12,0.60)',  border:'#e9730c' },
+    producto:  { fill:'rgba(93,54,255,0.55)',   border:'#5d36ff' },
+    cc:        { fill:'rgba(0,131,143,0.55)',   border:'#00838f' },
+    plantas: [
+      { solid:'rgba(10,110,209,0.90)',  light:'rgba(10,110,209,0.35)',  border:'#0a6ed1' }, // brand blue
+      { solid:'rgba(0,131,143,0.90)',   light:'rgba(0,131,143,0.35)',   border:'#00838f' }, // teal
+      { solid:'rgba(233,115,12,0.90)',  light:'rgba(233,115,12,0.35)',  border:'#e9730c' }, // orange
+      { solid:'rgba(16,126,62,0.90)',   light:'rgba(16,126,62,0.35)',   border:'#107e3e' }, // green
+      { solid:'rgba(93,54,255,0.90)',   light:'rgba(93,54,255,0.35)',   border:'#5d36ff' }, // indication purple
+      { solid:'rgba(8,84,160,0.90)',    light:'rgba(8,84,160,0.35)',    border:'#0854a0' }, // dark blue
+      { solid:'rgba(171,0,0,0.85)',     light:'rgba(171,0,0,0.30)',     border:'#bb0000' }, // negative red
+      { solid:'rgba(100,109,118,0.90)', light:'rgba(100,109,118,0.35)', border:'#646d76' }, // neutral grey
+    ]
+  }
+};
+
+let currentTheme = '';  // '' = default, 'azul-grey'
+
+function themeColors() {
+  return THEME_CHART_COLORS[currentTheme] || THEME_CHART_COLORS.default;
+}
+
+function applyTheme(theme) {
+  currentTheme = theme || '';
+  if (currentTheme) document.documentElement.setAttribute('data-theme', currentTheme);
+  else document.documentElement.removeAttribute('data-theme');
+  const sel = document.getElementById('themeSelect');
+  if (sel) sel.value = currentTheme;
+  try { localStorage.setItem('informe_theme', currentTheme); } catch(e){}
+  // Re-render de los gráficos con la paleta nueva
+  if (typeof render === 'function') render();
+}
+
+// ── UTILS ──
+function fmtCLP(v) {
+  if (v === null || v === undefined) return '—';
+  return '$' + Math.round(v).toLocaleString('es-CL');
+}
+function fmtNum(v, dec=2) {
+  if (v === null || v === undefined) return '—';
+  return Number(v).toLocaleString('es-CL', {minimumFractionDigits: dec, maximumFractionDigits: dec});
+}
+function fmtM3(v) { return fmtNum(v,2) + ' m³'; }
+
+function groupSum(arr, key, val='NETO') {
+  const m = {};
+  arr.forEach(r => {
+    const k = r[key] || 'Sin dato';
+    m[k] = (m[k]||0) + (r[val]||0);
+  });
+  return m;
+}
+
+function topN(obj, n=10, asc=false) {
+  let entries = Object.entries(obj).sort((a,b) => asc ? a[1]-b[1] : b[1]-a[1]);
+  return entries.slice(0, n);
+}
+
+function inferPeriod(data) {
+  if (!data.length) return '—';
+  const dates = data.map(r => r.FECHA_STR).filter(Boolean).sort();
+  const first = dates[0];
+  const last = dates[dates.length-1];
+  if (!first) return '—';
+  const d = new Date(last);
+  const mes = d.toLocaleString('es-CL', {month:'short'}).toUpperCase();
+  const anio = d.getFullYear();
+  return mes + ' ' + anio;
+}
+
+// ── POPULATE FILTERS ──
+const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+// ══════════════════════════════════════════════════════════════
+//  FILTROS MULTI-SELECCIÓN CON BUSCADOR Y CASCADA
+//  Cada filtro admite varios valores. Las opciones disponibles de
+//  un filtro se recalculan según lo seleccionado en los demás
+//  (cascada), de modo que al elegir un proveedor, el filtro de Rol
+//  solo ofrece los roles de ese proveedor.
+// ══════════════════════════════════════════════════════════════
+
+// Definición de cada filtro: cómo se extrae su valor de una fila.
+const FILTROS = {
+  mes:       { get: r => (r.FECHA_STR || '').slice(0,7), label: 'Mes'          },
+  planta:    { get: r => r.PLANTA || 'Sin dato',         label: 'Planta'       },
+  bodega:    { get: r => r.BODEGA || 'Sin dato',         label: 'Bodega'       },
+  proveedor: { get: r => r.PROVEEDOR2 || 'Sin dato',     label: 'Proveedor'    },
+  rol:       { get: r => rolDe(r),                       label: 'Rol'          },
+  cc:        { get: r => r['CENTRO COSTO'] || 'Sin dato',label: 'Centro Costo' },
+};
+const FILTRO_IDS = Object.keys(FILTROS);
+
+// Selección actual: { mes: Set, planta: Set, ... }
+const seleccion = {};
+FILTRO_IDS.forEach(k => seleccion[k] = new Set());
+
+// Texto de búsqueda por combo (no se persiste al cerrar)
+const comboQuery = {};
+
+// El ROL es el prefijo del centro de costo: "68-357 RENAICO..." -> "68-357"
+function rolDe(r) {
+  const cc = String(r['CENTRO COSTO'] || '').trim();
+  const m = cc.match(/^\s*(\d+\s*-\s*\d+)/);
+  return m ? m[1].replace(/\s+/g,'') : 'Sin rol';
+}
+
+// Devuelve las filas que pasan todos los filtros EXCEPTO el indicado.
+// Es la base de la cascada: para saber qué opciones ofrecer en 'rol',
+// se filtra por todo lo demás menos 'rol'.
+function filasExcepto(excluir) {
+  return allData.filter(r =>
+    FILTRO_IDS.every(k => {
+      if (k === excluir) return true;
+      const sel = seleccion[k];
+      return sel.size === 0 || sel.has(FILTROS[k].get(r));
+    })
+  );
+}
+
+// Filas que pasan TODOS los filtros
+function filasFiltradas() {
+  return allData.filter(r =>
+    FILTRO_IDS.every(k => {
+      const sel = seleccion[k];
+      return sel.size === 0 || sel.has(FILTROS[k].get(r));
+    })
+  );
+}
+
+// Opciones disponibles para un filtro, con el conteo de guías de cada una.
+function opcionesDe(id) {
+  const base = filasExcepto(id);
+  const conteo = new Map();
+  base.forEach(r => {
+    const v = FILTROS[id].get(r);
+    if (v === '') return;
+    conteo.set(v, (conteo.get(v) || 0) + 1);
+  });
+  let arr = [...conteo.entries()];
+  if (id === 'mes') arr.sort((a,b) => b[0].localeCompare(a[0]));           // más reciente primero
+  else if (id === 'rol') arr.sort((a,b) => b[1] - a[1]);                   // por nº de guías
+  else arr.sort((a,b) => String(a[0]).localeCompare(String(b[0]),'es'));
+  return arr;  // [ [valor, conteo], ... ]
+}
+
+function escHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+// Normaliza para buscar: minúsculas y sin acentos/ñ, de modo que
+// "cabana" encuentre "CABAÑA" y "canada" encuentre "CANADÁ".
+function normaliza(s) {
+  return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function marcar(texto, q) {
+  const t = String(texto);
+  if (!q) return escHtml(t);
+  const tn = normaliza(t);
+  // Se resalta la primera palabra de la búsqueda que aparezca en el texto
+  for (const w of normaliza(q).split(/\s+/).filter(Boolean)) {
+    const i = tn.indexOf(w);
+    if (i >= 0) {
+      return escHtml(t.slice(0,i)) + '<mark>' + escHtml(t.slice(i, i+w.length)) + '</mark>' + escHtml(t.slice(i+w.length));
+    }
+  }
+  return escHtml(t);
+}
+function etiquetaMes(v) {
+  const [a,m] = String(v).split('-');
+  const nombres = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  return (nombres[parseInt(m,10)] || v) + ' ' + a;
+}
+function textoOpcion(id, v) { return id === 'mes' ? etiquetaMes(v) : String(v); }
+
+// Dibuja los chips del filtro cerrado
+function syncComboUI(id) {
+  const wrap = document.getElementById('combo-' + id);
+  const box  = document.getElementById('cb-' + id);
+  const sel  = [...seleccion[id]];
+  if (sel.length === 0) {
+    wrap.classList.remove('selected');
+    const ph = (id === 'planta' || id === 'bodega') ? 'Todas' : 'Todos';
+    box.innerHTML = '<span class="combo-ph">' + ph + '</span>';
+    return;
+  }
+  wrap.classList.add('selected');
+  const MAX = 2;
+  let html = sel.slice(0, MAX).map(v =>
+    `<span class="chip"><span>${escHtml(textoOpcion(id,v))}</span><b data-q="${escHtml(v)}">&times;</b></span>`
+  ).join('');
+  if (sel.length > MAX) html += `<span class="chip more">+${sel.length - MAX}</span>`;
+  box.innerHTML = html;
+  box.querySelectorAll('.chip b').forEach(b => {
+    b.addEventListener('click', e => {
+      e.stopPropagation();
+      seleccion[id].delete(b.getAttribute('data-q'));
+      onFiltroCambia(id);
+    });
+  });
+}
+
+// Dibuja el desplegable: buscador + acciones + opciones con checkbox
+// Dibuja SOLO la lista de opciones. No toca el <input> del buscador, porque
+// recrearlo en cada tecla reiniciaba el cursor a la posición 0 y el texto
+// se escribía al revés.
+function renderOpciones(id) {
+  const list = document.getElementById('cl-' + id);
+  const cont = list.querySelector('.combo-opts');
+  if (!cont) return;
+  const q = (comboQuery[id] || '').trim();
+  const sel = seleccion[id];
+
+  const opciones = opcionesDe(id);
+  // Los valores ya seleccionados siempre se muestran, aunque la cascada
+  // los deje sin filas (si no, no habría forma de deseleccionarlos).
+  const presentes = new Set(opciones.map(o => o[0]));
+  sel.forEach(v => { if (!presentes.has(v)) opciones.push([v, 0]); });
+
+  const qn = normaliza(q);
+  // Se busca por palabras: todas deben aparecer, en cualquier orden.
+  // Así "aurora forestal" encuentra "FORESTAL AURORA SPA".
+  const terminos = qn.split(/\s+/).filter(Boolean);
+  const vis = terminos.length
+    ? opciones.filter(o => {
+        const t = normaliza(textoOpcion(id, o[0]));
+        return terminos.every(w => t.includes(w));
+      })
+    : opciones;
+  list._vis = vis;   // lo usa "Seleccionar todo"
+
+  let html = '';
+  if (vis.length === 0) {
+    html = '<div class="combo-opt empty">Sin coincidencias</div>';
+  } else {
+    vis.slice(0, 400).forEach(([v, n]) => {
+      const on = sel.has(v);
+      html += `<div class="combo-opt ${on?'on':''}" data-v="${escHtml(v)}">
+        <span class="cbx">${on ? '&#10003;' : ''}</span>
+        <span>${marcar(textoOpcion(id,v), q)}</span>
+        <span class="cnt">${n}</span>
+      </div>`;
+    });
+  }
+  cont.innerHTML = html;
+
+  cont.querySelectorAll('.combo-opt[data-v]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      toggleOpcion(id, el.getAttribute('data-v'));
+    });
+  });
+}
+
+// Construye el desplegable completo (una sola vez, al abrirlo)
+function renderComboList(id) {
+  const list = document.getElementById('cl-' + id);
+
+  list.innerHTML =
+    `<input type="text" class="combo-search" id="cs-${id}" placeholder="Buscar…" autocomplete="off">` +
+    `<div class="combo-actions">
+       <button data-act="all">Seleccionar todo</button>
+       <button data-act="none">Ninguno</button>
+     </div>
+     <div class="combo-opts"></div>`;
+  list.classList.add('open');
+
+  const search = document.getElementById('cs-' + id);
+  search.value = comboQuery[id] || '';
+
+  search.addEventListener('input', () => {
+    comboQuery[id] = search.value;
+    renderOpciones(id);          // solo repinta opciones: el cursor no se mueve
+  });
+  search.addEventListener('keydown', e => {
+    if (e.key === 'Escape') cerrarCombo(id);
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const primero = list.querySelector('.combo-opt[data-v]');
+      if (primero) toggleOpcion(id, primero.getAttribute('data-v'));
+    }
+  });
+
+  list.querySelectorAll('.combo-actions button').forEach(b => {
+    b.addEventListener('click', e => {
+      e.stopPropagation();
+      if (b.getAttribute('data-act') === 'all') (list._vis || []).forEach(([v]) => seleccion[id].add(v));
+      else seleccion[id].clear();
+      // Se repinta sin reconstruir el buscador, para no perder el texto escrito
+      syncComboUI(id);
+      FILTRO_IDS.forEach(k => { if (k !== id) syncComboUI(k); });
+      podarSelecciones(id);
+      renderOpciones(id);
+      applyFilters();
+    });
+  });
+
+  renderOpciones(id);
+  setTimeout(() => search.focus(), 10);
+}
+
+function toggleOpcion(id, v) {
+  if (seleccion[id].has(v)) seleccion[id].delete(v);
+  else seleccion[id].add(v);
+  onFiltroCambia(id, true);
+}
+
+// Tras cambiar un filtro: se repinta ese combo, se limpian selecciones de
+// otros filtros que quedaron sin sustento, y se recalcula todo el informe.
+function onFiltroCambia(id, mantenerAbierto) {
+  podarSelecciones(id);
+  syncComboUI(id);
+  FILTRO_IDS.forEach(k => { if (k !== id) syncComboUI(k); });
+  // Solo se repintan las opciones: si se reconstruyera el desplegable,
+  // el buscador perdería el foco y el texto ya escrito.
+  if (mantenerAbierto) renderOpciones(id);
+  applyFilters();
+}
+
+// Si al filtrar por proveedor un rol seleccionado ya no tiene ninguna guía,
+// esa selección se descarta: de lo contrario el informe quedaría vacío
+// por una condición que el usuario ya no puede ver ni corregir.
+function podarSelecciones(origen) {
+  FILTRO_IDS.forEach(k => {
+    if (k === origen || seleccion[k].size === 0) return;
+    const validos = new Set(filasExcepto(k).map(r => FILTROS[k].get(r)));
+    [...seleccion[k]].forEach(v => { if (!validos.has(v)) seleccion[k].delete(v); });
+  });
+}
+
+function cerrarCombo(id) {
+  const l = document.getElementById('cl-' + id);
+  if (l) l.classList.remove('open');
+  comboQuery[id] = '';
+}
+
+function initCombo(id) {
+  const box   = document.getElementById('cb-' + id);
+  const clear = document.getElementById('cx-' + id);
+  box.addEventListener('click', () => {
+    const list = document.getElementById('cl-' + id);
+    const abierto = list.classList.contains('open');
+    FILTRO_IDS.forEach(cerrarCombo);
+    if (!abierto) renderComboList(id);
+  });
+  clear.addEventListener('click', e => {
+    e.stopPropagation();
+    seleccion[id].clear();
+    onFiltroCambia(id);
+  });
+}
+
+// populateFilters queda por compatibilidad: los combos se alimentan solos
+// desde allData mediante opcionesDe(), así que basta con repintarlos.
+function populateFilters(data) {
+  FILTRO_IDS.forEach(id => {
+    // Descarta selecciones que ya no existan tras una recarga de datos
+    const validos = new Set(allData.map(r => FILTROS[id].get(r)));
+    [...seleccion[id]].forEach(v => { if (!validos.has(v)) seleccion[id].delete(v); });
+    syncComboUI(id);
+  });
+}
+
+FILTRO_IDS.forEach(initCombo);
+
+document.addEventListener('click', e => {
+  FILTRO_IDS.forEach(id => {
+    const wrap = document.getElementById('combo-' + id);
+    if (wrap && !wrap.contains(e.target)) cerrarCombo(id);
+  });
+});
+
+function applyFilters() {
+  filtered = filasFiltradas();
+  page = 1;
+  render();
+}
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  FILTRO_IDS.forEach(id => { seleccion[id].clear(); cerrarCombo(id); syncComboUI(id); });
+  applyFilters();
+});
+
+// ── RECONSTRUIR BASE EN FIREBASE ──
+// Migra los IDs de documento al criterio de identidad actual y elimina
+// duplicados huérfanos. Operación destructiva: pide doble confirmación.
+const btnRebuildHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg> Reconstruir';
+async function reconstruirBase() {
+  if (!window.FB_ENABLED) { alert('Firebase no está configurado.'); return; }
+  if (!allData.length) { alert('No hay datos cargados para reconstruir. Carga primero el Excel.'); return; }
+  if (!confirm(
+      'RECONSTRUIR BASE EN FIREBASE\n\n' +
+      'Esto borra todos los documentos de la nube y los vuelve a grabar con ' +
+      'los ' + allData.length + ' registros que tienes ahora cargados.\n\n' +
+      'Úsalo una sola vez, tras cambiar el criterio de identidad de las guías. ' +
+      'Asegúrate de que los datos en pantalla sean los correctos y completos.\n\n' +
+      '¿Continuar?')) return;
+  if (!confirm('Confirmación final: se BORRARÁ y regrabará toda la colección. ¿Seguro?')) return;
+
+  try {
+    const btn = document.getElementById('btnRebuild');
+    if (btn) { btn.disabled = true; btn.textContent = 'Reconstruyendo…'; }
+    const { borrados, escritas } = await window.reconstruirFirebase();
+    alert(`Base reconstruida:\n• ${borrados} documentos antiguos borrados\n• ${escritas} guías regrabadas con el ID nuevo`);
+    if (btn) { btn.disabled = false; btn.innerHTML = btnRebuildHTML; }
+  } catch (e) {
+    console.error(e);
+    alert('Error al reconstruir la base:\n' + e.message);
+    const btn = document.getElementById('btnRebuild');
+    if (btn) { btn.disabled = false; btn.innerHTML = btnRebuildHTML; }
+  }
+}
+
+// Al cambiar el ancho de la ventana las tarjetas se reacomodan:
+// hay que volver a medir qué montos caben.
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(ajustaTodosLosKpis, 120);
+});
+
+// ── Cierre del detalle de proveedor ──// Se comprueba la existencia de cada nodo: si faltara, un getElementById nulo
+// lanzaría una excepción que detendría el resto del script.
+(function initDetalleProveedor() {
+  const btn     = document.getElementById('dpClose');
+  const overlay = document.getElementById('dpOverlay');
+  if (btn) btn.addEventListener('click', cerrarDetalleProveedor);
+  if (overlay) {
+    overlay.addEventListener('click', e => {
+      // Solo si el clic fue en el fondo, no dentro del panel
+      if (e.target === overlay) cerrarDetalleProveedor();
+    });
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') cerrarDetalleProveedor();
+  });
+})();
+document.getElementById('tableSearch').addEventListener('input', e => {
+  tableSearch = e.target.value.toLowerCase();
+  page = 1;
+  renderTable();
+});
+
+// ── CHARTS ──
+function chartDefaults() {
+  const TC = themeColors();
+  return {
+    plugins: { legend: { display: false }, tooltip: { callbacks: {} } },
+    scales: {
+      x: { ticks: { color:TC.tick, font:{size:10} }, grid: { color:TC.gridSoft } },
+      y: { ticks: { color:TC.tick, font:{size:10} }, grid: { color:TC.grid } }
+    }
+  };
+}
+
+// ══════════════════════════════════════════════════════════════
+//  DETALLE DE PROVEEDOR (clic en el gráfico Top Proveedores)
+//  Respeta los filtros activos: si hay un mes filtrado, el detalle
+//  corresponde solo a ese mes, igual que el resto del informe.
+// ══════════════════════════════════════════════════════════════
+function abrirDetalleProveedor(prov) {
+  const rows = filtered.filter(r => (r.PROVEEDOR2 || 'Sin dato') === prov);
+  if (!rows.length) return;
+
+  const volM3 = rows.filter(esM3).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+  const volMR = rows.filter(esMR).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+  const neto  = rows.reduce((s,r)=>s+(r.NETO||0),0);
+  const netoMadera = rows.reduce((s,r)=>s+(r['NETO MADERA']||0),0);
+
+  // Promedio de entregas diarias: guías ÷ días con recepción efectiva
+  const dias = new Set(rows.filter(r => (r.CANTIDAD||0) > 0).map(r => r.FECHA_STR).filter(Boolean));
+  const nDias = dias.size;
+  const guiasDia = nDias ? rows.length / nDias : 0;
+  const m3Dia = nDias ? volM3 / nDias : 0;
+  const mrDia = nDias ? volMR / nDias : 0;
+
+  // Agrupa por una clave y devuelve [valor, volumen, nº guías] ordenado
+  const agrupa = (fn) => {
+    const m = new Map();
+    rows.forEach(r => {
+      const k = fn(r) || 'Sin dato';
+      const a = m.get(k) || { vol: 0, n: 0, m3: 0, mr: 0 };
+      a.vol += (r.CANTIDAD||0);
+      a.n++;
+      if (esM3(r)) a.m3 += (r.CANTIDAD||0); else a.mr += (r.CANTIDAD||0);
+      m.set(k, a);
+    });
+    return [...m.entries()].sort((a,b) => b[1].vol - a[1].vol);
+  };
+
+  const porCC      = agrupa(r => r['CENTRO COSTO']);
+  const porBodega  = agrupa(r => r.BODEGA);
+  const porPlanta  = agrupa(r => r.PLANTA);
+  const porProd    = agrupa(r => r['DESCRIPCIÓN'] || r.PRODUCTO);
+
+  const volTxt = (a) => {
+    const p = [];
+    if (a.m3 > 0) p.push(fmtNum(a.m3,1) + ' m³');
+    if (a.mr > 0) p.push(fmtNum(a.mr,1) + ' MR');
+    return p.join(' · ') || '0';
+  };
+
+  const tabla = (titulo, arr, max) => {
+    const vis = arr.slice(0, max || 6);
+    const resto = arr.length - vis.length;
+    return `<div class="dp-block">
+      <div class="dp-h">${titulo} <span class="dp-n">${arr.length}</span></div>
+      ${vis.map(([k,a]) => `
+        <div class="dp-row">
+          <span class="dp-k" title="${escHtml(k)}">${escHtml(k)}</span>
+          <span class="dp-v">${volTxt(a)}<i>${a.n} guías</i></span>
+        </div>`).join('')}
+      ${resto > 0 ? `<div class="dp-more">+ ${resto} más</div>` : ''}
+    </div>`;
+  };
+
+  const volGlobal = [];
+  if (volM3 > 0) volGlobal.push(fmtNum(volM3,2) + ' m³');
+  if (volMR > 0) volGlobal.push(fmtNum(volMR,2) + ' MR');
+
+  const entregasDia = [];
+  if (volM3 > 0) entregasDia.push(fmtNum(m3Dia,2) + ' m³/día');
+  if (volMR > 0) entregasDia.push(fmtNum(mrDia,2) + ' MR/día');
+
+  document.getElementById('dpTitulo').textContent = prov;
+  document.getElementById('dpSub').innerHTML =
+    `${rows.length} guías · ${nDias} días con recepción` +
+    (filtroActivo() ? ' · <span style="color:var(--amber)">según filtros activos</span>' : '');
+
+  document.getElementById('dpBody').innerHTML = `
+    <div class="dp-kpis">
+      <div class="dp-kpi"><span>Volumen total</span><b>${volGlobal.join('<br>') || '0'}</b></div>
+      <div class="dp-kpi"><span>Prom. entregas diarias</span><b>${fmtNum(guiasDia,1)} guías/día</b><i>${entregasDia.join(' · ')}</i></div>
+      <div class="dp-kpi"><span>Neto total</span><b>${fmtCLP(neto)}</b><i>madera: ${fmtCLP(netoMadera)}</i></div>
+    </div>
+    <div class="dp-grid">
+      ${tabla('Centro de costo', porCC)}
+      ${tabla('Planta destino', porPlanta)}
+      ${tabla('Bodega / destino', porBodega)}
+      ${tabla('Producto', porProd)}
+    </div>`;
+
+  document.getElementById('dpOverlay').style.display = 'flex';
+}
+
+// ¿Hay algún filtro aplicado?
+function filtroActivo() {
+  return FILTRO_IDS.some(k => seleccion[k].size > 0);
+}
+
+function cerrarDetalleProveedor() {
+  const o = document.getElementById('dpOverlay');
+  if (o) o.style.display = 'none';
+}
+
+// ══════════════════════════════════════════════════════════════
+//  DETALLE DE PRODUCTO (clic en el gráfico Top Volumen por Producto)
+//  Muestra, para el producto elegido: proveedor, centro de costo,
+//  cantidad de metros y valor neto. Respeta los filtros activos.
+// ══════════════════════════════════════════════════════════════
+function abrirDetalleProducto(codigo) {
+  const rows = filtered.filter(r => String(r.PRODUCTO) === String(codigo));
+  if (!rows.length) return;
+
+  const volM3 = rows.filter(esM3).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+  const volMR = rows.filter(esMR).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+  const neto  = rows.reduce((s,r)=>s+(r.NETO||0),0);
+  const netoMadera = rows.reduce((s,r)=>s+(r['NETO MADERA']||0),0);
+
+  // Precio unitario ponderado (valor de la madera / cantidad)
+  const volTotal = volM3 + volMR;
+  const precioU = volTotal > 0 ? netoMadera / volTotal : 0;
+
+  const agrupa = (fn) => {
+    const m = new Map();
+    rows.forEach(r => {
+      const k = fn(r) || 'Sin dato';
+      const a = m.get(k) || { vol: 0, n: 0, m3: 0, mr: 0, neto: 0 };
+      a.vol += (r.CANTIDAD||0);
+      a.neto += (r.NETO||0);
+      a.n++;
+      if (esM3(r)) a.m3 += (r.CANTIDAD||0); else a.mr += (r.CANTIDAD||0);
+      m.set(k, a);
+    });
+    return [...m.entries()].sort((a,b) => b[1].vol - a[1].vol);
+  };
+
+  const porProv = agrupa(r => r.PROVEEDOR2);
+  const porCC   = agrupa(r => r['CENTRO COSTO']);
+
+  const volTxt = (a) => {
+    const p = [];
+    if (a.m3 > 0) p.push(fmtNum(a.m3,1) + ' m³');
+    if (a.mr > 0) p.push(fmtNum(a.mr,1) + ' MR');
+    return p.join(' · ') || '0';
+  };
+
+  // Tabla que muestra volumen Y neto por cada fila (lo que pediste)
+  const tabla = (titulo, arr, max) => {
+    const vis = arr.slice(0, max || 8);
+    const resto = arr.length - vis.length;
+    return `<div class="dp-block">
+      <div class="dp-h">${titulo} <span class="dp-n">${arr.length}</span></div>
+      ${vis.map(([k,a]) => `
+        <div class="dp-row">
+          <span class="dp-k" title="${escHtml(k)}">${escHtml(k)}</span>
+          <span class="dp-v">${volTxt(a)}<i>${fmtCLP(a.neto)} · ${a.n} guías</i></span>
+        </div>`).join('')}
+      ${resto > 0 ? `<div class="dp-more">+ ${resto} más</div>` : ''}
+    </div>`;
+  };
+
+  const volGlobal = [];
+  if (volM3 > 0) volGlobal.push(fmtNum(volM3,2) + ' m³');
+  if (volMR > 0) volGlobal.push(fmtNum(volMR,2) + ' MR');
+
+  // Nombre legible: código + la descripción más frecuente de ese producto
+  const descs = {};
+  rows.forEach(r => { const dd = r['DESCRIPCIÓN']; if (dd) descs[dd] = (descs[dd]||0)+1; });
+  const descTop = Object.entries(descs).sort((a,b)=>b[1]-a[1])[0];
+  const cod = String(codigo).replace(/\.0$/, '');
+
+  document.getElementById('dpTitulo').textContent =
+    descTop ? `${cod} — ${descTop[0]}` : `Producto ${cod}`;
+  document.getElementById('dpSub').innerHTML =
+    `${rows.length} guías` +
+    (filtroActivo() ? ' · <span style="color:var(--amber)">según filtros activos</span>' : '');
+
+  document.getElementById('dpBody').innerHTML = `
+    <div class="dp-kpis">
+      <div class="dp-kpi"><span>Cantidad total</span><b>${volGlobal.join('<br>') || '0'}</b></div>
+      <div class="dp-kpi"><span>Valor neto</span><b>${fmtCLP(neto)}</b><i>madera: ${fmtCLP(netoMadera)}</i></div>
+      <div class="dp-kpi"><span>Precio unitario</span><b>${fmtCLP(precioU)}</b><i>ponderado, valor madera</i></div>
+    </div>
+    <div class="dp-grid">
+      ${tabla('Proveedor', porProv)}
+      ${tabla('Centro de costo', porCC)}
+    </div>`;
+
+  document.getElementById('dpOverlay').style.display = 'flex';
+}
+
+// ══════════════════════════════════════════════════════════════
+//  EFECTO 3D EN LOS GRÁFICOS
+//  Chart.js es 2D. Para dar volumen sin cambiar de librería se usan:
+//   · gradientes que simulan iluminación desde arriba/izquierda
+//   · un plugin que dibuja la cara lateral y superior de cada barra
+//   · sombra proyectada bajo las series
+//  Se evita la perspectiva real: distorsionaría las alturas y haría
+//  difícil comparar valores, que es lo que el informe necesita.
+// ══════════════════════════════════════════════════════════════
+
+// Aclara u oscurece un color rgba/hex en un porcentaje
+function ajustaLuz(color, pct) {
+  let r, g, b, a = 1;
+  const m = String(color).match(/rgba?\(([^)]+)\)/);
+  if (m) {
+    const p = m[1].split(',').map(x => parseFloat(x.trim()));
+    [r, g, b] = p; if (p.length > 3) a = p[3];
+  } else {
+    const hex = String(color).replace('#','');
+    r = parseInt(hex.slice(0,2),16); g = parseInt(hex.slice(2,4),16); b = parseInt(hex.slice(4,6),16);
+  }
+  const f = v => Math.max(0, Math.min(255, Math.round(v + (pct > 0 ? (255-v)*pct : v*pct))));
+  return `rgba(${f(r)},${f(g)},${f(b)},${a})`;
+}
+
+// Gradiente vertical (barras verticales / áreas): luz arriba
+function gradV(ctx, area, color) {
+  if (!area) return color;
+  const g = ctx.createLinearGradient(0, area.top, 0, area.bottom);
+  g.addColorStop(0, ajustaLuz(color, 0.28));
+  g.addColorStop(0.5, color);
+  g.addColorStop(1, ajustaLuz(color, -0.22));
+  return g;
+}
+// Gradiente horizontal (barras horizontales): luz desde la izquierda
+function gradH(ctx, area, color) {
+  if (!area) return color;
+  const g = ctx.createLinearGradient(area.left, 0, area.right, 0);
+  g.addColorStop(0, ajustaLuz(color, -0.15));
+  g.addColorStop(0.45, color);
+  g.addColorStop(1, ajustaLuz(color, 0.30));
+  return g;
+}
+
+// Plugin: dibuja la "cara" lateral de cada barra para darle cuerpo.
+const plugin3D = {
+  id: 'efecto3d',
+  beforeDatasetsDraw(chart) {
+    const { ctx } = chart;
+    if (chart.config.type !== 'bar') return;
+    const horizontal = chart.options.indexAxis === 'y';
+    const P = 5;   // profundidad en píxeles
+
+    chart.data.datasets.forEach((ds, di) => {
+      const meta = chart.getDatasetMeta(di);
+      if (meta.hidden) return;
+      meta.data.forEach(bar => {
+        const { x, y, base } = bar;
+        const w = bar.width, h = bar.height;
+        const col = ds.borderColor || '#888';
+        ctx.save();
+        if (horizontal) {
+          // Barra horizontal: cara superior e inferior en diagonal
+          const x0 = Math.min(base, x), x1 = Math.max(base, x);
+          const yTop = y - h/2, yBot = y + h/2;
+          ctx.fillStyle = ajustaLuz(col, 0.35);            // cara superior (luz)
+          ctx.beginPath();
+          ctx.moveTo(x0, yTop); ctx.lineTo(x0 + P, yTop - P);
+          ctx.lineTo(x1 + P, yTop - P); ctx.lineTo(x1, yTop);
+          ctx.closePath(); ctx.fill();
+          ctx.fillStyle = ajustaLuz(col, -0.30);           // cara derecha (sombra)
+          ctx.beginPath();
+          ctx.moveTo(x1, yTop); ctx.lineTo(x1 + P, yTop - P);
+          ctx.lineTo(x1 + P, yBot - P); ctx.lineTo(x1, yBot);
+          ctx.closePath(); ctx.fill();
+        } else {
+          // Barra vertical: cara superior y lateral derecha
+          const yTop = Math.min(base, y), yBot = Math.max(base, y);
+          const xL = x - w/2, xR = x + w/2;
+          ctx.fillStyle = ajustaLuz(col, 0.40);            // tapa superior
+          ctx.beginPath();
+          ctx.moveTo(xL, yTop); ctx.lineTo(xL + P, yTop - P);
+          ctx.lineTo(xR + P, yTop - P); ctx.lineTo(xR, yTop);
+          ctx.closePath(); ctx.fill();
+          ctx.fillStyle = ajustaLuz(col, -0.32);           // costado derecho
+          ctx.beginPath();
+          ctx.moveTo(xR, yTop); ctx.lineTo(xR + P, yTop - P);
+          ctx.lineTo(xR + P, yBot - P); ctx.lineTo(xR, yBot);
+          ctx.closePath(); ctx.fill();
+        }
+        ctx.restore();
+      });
+    });
+  }
+};
+
+// Plugin: sombra proyectada bajo líneas y arcos (dona)
+const pluginSombra = {
+  id: 'sombra3d',
+  beforeDatasetDraw(chart, args) {
+    const t = chart.config.type;
+    if (t !== 'line' && t !== 'doughnut' && t !== 'pie') return;
+    const { ctx } = chart;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.35)';
+    ctx.shadowBlur = t === 'line' ? 8 : 14;
+    ctx.shadowOffsetX = t === 'line' ? 0 : 3;
+    ctx.shadowOffsetY = t === 'line' ? 4 : 6;
+  },
+  afterDatasetDraw(chart) {
+    const t = chart.config.type;
+    if (t !== 'line' && t !== 'doughnut' && t !== 'pie') return;
+    chart.ctx.restore();
+  }
+};
+
+if (typeof Chart !== 'undefined') {
+  Chart.register(plugin3D, pluginSombra);
+}
+
+function mkChart(id, type, data, options={}) {
+  const ctx = document.getElementById(id).getContext('2d');
+  if (charts[id]) charts[id].destroy();
+
+  // Los colores planos se convierten en gradientes al vuelo. Se usa una
+  // función (Chart.js la evalúa cuando ya conoce el área de dibujo, que es
+  // cuando el gradiente puede calcularse).
+  if (type === 'bar') {
+    const horizontal = options.indexAxis === 'y';
+    // La cara 3D sobresale ~5px arriba y a la derecha: se reserva ese espacio
+    options.layout = options.layout || {};
+    options.layout.padding = Object.assign({ top: 8, right: 10 }, options.layout.padding || {});
+    data.datasets.forEach(ds => {
+      const base = ds.backgroundColor;
+      if (typeof base === 'string') {
+        ds.backgroundColor = c => {
+          const { ctx: cx, chartArea } = c.chart;
+          return chartArea ? (horizontal ? gradH(cx, chartArea, base) : gradV(cx, chartArea, base)) : base;
+        };
+      }
+      ds.borderWidth = ds.borderWidth ?? 1;
+    });
+  } else if (type === 'doughnut' || type === 'pie') {
+    data.datasets.forEach(ds => {
+      ds.borderWidth = 2;
+      ds.hoverOffset = 10;     // el sector se despega al pasar el cursor
+      ds.spacing = 2;
+    });
+  } else if (type === 'line') {
+    data.datasets.forEach(ds => {
+      const base = ds.backgroundColor;
+      if (typeof base === 'string' && ds.fill) {
+        ds.backgroundColor = c => {
+          const { ctx: cx, chartArea } = c.chart;
+          if (!chartArea) return base;
+          const g = cx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+          g.addColorStop(0, ajustaLuz(base, 0.10));
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          return g;
+        };
+      }
+    });
+  }
+
+  charts[id] = new Chart(ctx, { type, data, options });
+}
+
+function clpTooltip(ctx) {
+  return '$' + Math.round(ctx.parsed.y||ctx.parsed||0).toLocaleString('es-CL');
+}
+function clpTooltipX(ctx) {
+  return '$' + Math.round(ctx.parsed.x||0).toLocaleString('es-CL');
+}
+
+function renderCharts() {
+  const d = filtered;
+
+  // 1. Evolución diaria — Volumen por UM (líneas separadas)
+  const allDays = [...new Set(d.map(r => r.FECHA_STR))].sort();
+  const dayLabels = allDays.map(l => { const p = l.split('-'); return p[2]+'/'+p[1]; });
+
+  const volMRbyDay = {}, volM3byDay = {};
+  allDays.forEach(day => { volMRbyDay[day] = 0; volM3byDay[day] = 0; });
+  d.forEach(r => {
+    if (esMR(r)) volMRbyDay[r.FECHA_STR] = (volMRbyDay[r.FECHA_STR]||0) + (r.CANTIDAD||0);
+    if (esM3(r)) volM3byDay[r.FECHA_STR] = (volM3byDay[r.FECHA_STR]||0) + (r.CANTIDAD||0);
+  });
+
+  const CD = chartDefaults();
+  const lineMR = themeColors().plantas[2]; // naranja
+  const lineM3 = themeColors().plantas[3]; // verde
+  const hasMR = Object.values(volMRbyDay).some(v => v > 0);
+  const hasM3 = Object.values(volM3byDay).some(v => v > 0);
+  const datasets = [];
+  if (hasMR) datasets.push({
+    label: 'MR',
+    data: allDays.map(day => +volMRbyDay[day].toFixed(2)),
+    borderColor: lineMR.border,
+    backgroundColor: lineMR.light,
+    borderWidth: 2.5,
+    pointRadius: 3,
+    pointHoverRadius: 6,
+    pointBackgroundColor: lineMR.border,
+    pointBorderColor: '#fff',
+    pointBorderWidth: 1,
+    fill: true,
+    tension: 0.35,
+  });
+  if (hasM3) datasets.push({
+    label: 'm³',
+    data: allDays.map(day => +volM3byDay[day].toFixed(2)),
+    borderColor: lineM3.border,
+    backgroundColor: lineM3.light,
+    borderWidth: 2.5,
+    pointRadius: 3,
+    pointHoverRadius: 6,
+    pointBackgroundColor: lineM3.border,
+    pointBorderColor: '#fff',
+    pointBorderWidth: 1,
+    fill: true,
+    tension: 0.35,
+  });
+
+  mkChart('chartDiario', 'line', {
+    labels: dayLabels,
+    datasets: datasets,
+  }, {
+    ...CD,
+    plugins: {
+      legend: { display: true, position: 'top', labels: { color:themeColors().tick, font:{size:11}, boxWidth:12 } },
+      tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString('es-CL',{minimumFractionDigits:2,maximumFractionDigits:2}) } },
+    },
+    scales: {
+      x: { ...CD.scales.x },
+      y: {
+        ...CD.scales.y,
+        title: { display: true, text: 'Volumen', color: themeColors().tick, font:{size:10} },
+        ticks: { ...CD.scales.y.ticks, callback: v => v.toLocaleString('es-CL') },
+      }
+    },
+    maintainAspectRatio: false,
+  });
+
+  // 2. Planta — dona con segmentos MR y m³, colores distintos por planta
+  const plantas = [...new Set(d.map(r => r.PLANTA).filter(Boolean))].sort();
+  // Paleta ampliada — soporta cualquier cantidad de plantas (según tema activo)
+  const paleta = themeColors().plantas;
+  const dLabels=[], dData=[], dBg=[], dBorder=[];
+  plantas.forEach((p, pi) => {
+    const col = paleta[pi % paleta.length];
+    const volMR = d.filter(r=>r.PLANTA===p && esMR(r)).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+    const volM3 = d.filter(r=>r.PLANTA===p && esM3(r)).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+    if (volMR > 0) {
+      dLabels.push(p+' · MR');
+      dData.push(+volMR.toFixed(2));
+      dBg.push(col.solid); dBorder.push(col.border);
+    }
+    if (volM3 > 0) {
+      dLabels.push(p+' · m³');
+      dData.push(+volM3.toFixed(2));
+      dBg.push(col.light); dBorder.push(col.border);
+    }
+  });
+  mkChart('chartPlanta', 'doughnut', {
+    labels: dLabels,
+    datasets: [{ data: dData, backgroundColor: dBg, borderColor: dBorder, borderWidth: 2 }]
+  }, {
+    plugins: {
+      legend: { display:true, position:'bottom', labels:{color:themeColors().tick,font:{size:11},boxWidth:12} },
+      tooltip: { callbacks: { label: ctx => ctx.label+': '+ctx.parsed.toLocaleString('es-CL',{minimumFractionDigits:2,maximumFractionDigits:2}) } },
+    },
+    maintainAspectRatio: false,
+    cutout: '52%',
+    radius: '92%',
+    rotation: -25,          // ligera rotación: da sensación de pieza física
+    animation: { animateRotate: true, animateScale: true },
+  });
+
+  // 4. Bodega (horizontal bar)
+  const TC = themeColors();
+  const bodegaTop = topN(groupSum(d, 'BODEGA'), 7);
+  mkChart('chartBodega', 'bar', {
+    labels: bodegaTop.map(e=>e[0]),
+    datasets: [{
+      data: bodegaTop.map(e=>e[1]),
+      backgroundColor: TC.bodega.fill,
+      borderColor: TC.bodega.border,
+      borderWidth: 1,
+      borderRadius: 3,
+    }]
+  }, {
+    indexAxis: 'y',
+    plugins: { legend:{display:false}, tooltip:{callbacks:{label: clpTooltipX}} },
+    scales: {
+      x: { ticks:{color:TC.tick,font:{size:10},callback:v=>'$'+Math.round(v/1e6)+'M'}, grid:{color:TC.grid} },
+      y: { ticks:{color:TC.tick,font:{size:10}}, grid:{color:TC.gridSoft} }
+    },
+    maintainAspectRatio: false,
+  });
+
+  // 5. Proveedores (horizontal bar) — clic en una barra abre el detalle
+  const provTop = topN(groupSum(d, 'PROVEEDOR2'), 10);
+  const provNombres = provTop.map(e => e[0]);   // nombres completos, sin truncar
+  mkChart('chartProv', 'bar', {
+    labels: provTop.map(e=>e[0].length>28?e[0].slice(0,28)+'…':e[0]),
+    datasets: [{
+      data: provTop.map(e=>e[1]),
+      backgroundColor: TC.prov.fill,
+      borderColor: TC.prov.border,
+      borderWidth: 1,
+      borderRadius: 3,
+    }]
+  }, {
+    indexAxis: 'y',
+    onClick: (evt, elems) => {
+      if (!elems.length) return;
+      abrirDetalleProveedor(provNombres[elems[0].index]);
+    },
+    onHover: (evt, elems) => {
+      evt.native.target.style.cursor = elems.length ? 'pointer' : 'default';
+    },
+    plugins: {
+      legend:{display:false},
+      tooltip:{callbacks:{
+        label: clpTooltipX,
+        footer: () => 'Clic para ver el detalle'
+      }}
+    },
+    scales: {
+      x: { ticks:{color:TC.tick,font:{size:10},callback:v=>'$'+Math.round(v/1e6)+'M'}, grid:{color:TC.grid} },
+      y: { ticks:{color:TC.tick,font:{size:9}}, grid:{color:TC.gridSoft} }
+    },
+    maintainAspectRatio: false,
+  });
+
+  // 6. Producto (PRODUCTO2 → código limpio, fallback a PRODUCTO)
+  const prodMap = groupSum(d, 'PRODUCTO', 'CANTIDAD');
+  const prodTop = topN(prodMap, 8);
+  const prodCodigos = prodTop.map(e => e[0]);   // códigos completos, sin truncar
+  // Limpiar etiquetas: "3232.0" → "3232"
+  const prodLabel = v => String(v).replace(/\.0$/, '');
+  mkChart('chartProducto', 'bar', {
+    labels: prodTop.map(e => { const l = prodLabel(e[0]); return l.length>22 ? l.slice(0,22)+'…' : l; }),
+    datasets: [{
+      data: prodTop.map(e=>e[1]),
+      backgroundColor: TC.producto.fill,
+      borderColor: TC.producto.border,
+      borderWidth: 1,
+      borderRadius: 3,
+    }]
+  }, {
+    indexAxis: 'y',
+    onClick: (evt, elems) => {
+      if (!elems.length) return;
+      abrirDetalleProducto(prodCodigos[elems[0].index]);
+    },
+    onHover: (evt, elems) => {
+      evt.native.target.style.cursor = elems.length ? 'pointer' : 'default';
+    },
+    plugins: {
+      legend:{display:false},
+      tooltip:{callbacks:{
+        label: ctx => fmtNum(ctx.parsed.x,2) + ' unidades',
+        footer: () => 'Clic para ver el detalle'
+      }}
+    },
+    scales: {
+      x: { ticks:{color:TC.tick,font:{size:10}}, grid:{color:TC.grid} },
+      y: { ticks:{color:TC.tick,font:{size:10}}, grid:{color:TC.gridSoft} }
+    },
+    maintainAspectRatio: false,
+  });
+
+  // 7. Centro Costo (top 10 horizontal)
+  const ccTop = topN(groupSum(d, 'CENTRO COSTO'), 10);
+  mkChart('chartCC', 'bar', {
+    labels: ccTop.map(e=>e[0].length>32?e[0].slice(0,32)+'…':e[0]),
+    datasets: [{
+      data: ccTop.map(e=>e[1]),
+      backgroundColor: TC.cc.fill,
+      borderColor: TC.cc.border,
+      borderWidth: 1,
+      borderRadius: 3,
+    }]
+  }, {
+    indexAxis: 'y',
+    plugins: { legend:{display:false}, tooltip:{callbacks:{label: clpTooltipX}} },
+    scales: {
+      x: { ticks:{color:TC.tick,font:{size:10},callback:v=>'$'+Math.round(v/1e6)+'M'}, grid:{color:TC.grid} },
+      y: { ticks:{color:TC.tick,font:{size:9}}, grid:{color:TC.gridSoft} }
+    },
+    maintainAspectRatio: false,
+  });
+}
+
+// ── KPIs ──
+// ── AJUSTE AUTOMÁTICO DE FUENTE EN LAS TARJETAS KPI ──
+// Un monto como $3.565.363.860 no cabe con el tamaño base. En vez de adivinar
+// por cantidad de dígitos (que falla según el ancho real de la tarjeta, que
+// cambia con la pantalla), se mide si el texto desborda y se baja un escalón
+// hasta que entre.
+function ajustaKpiFont(el) {
+  if (!el) return;
+  el.classList.remove('fit-1','fit-2','fit-3','fit-4');
+  // scrollWidth > clientWidth significa que el texto no cabe
+  const escalones = ['fit-1','fit-2','fit-3','fit-4'];
+  for (let i = 0; i < escalones.length; i++) {
+    if (el.scrollWidth <= el.clientWidth + 1) return;  // ya cabe
+    el.classList.remove(...escalones);
+    el.classList.add(escalones[i]);
+  }
+}
+
+// Ajusta todas las tarjetas de una vez
+function ajustaTodosLosKpis() {
+  document.querySelectorAll('.kpi-value').forEach(el => {
+    // Las tarjetas con varias líneas (promedio diario) llevan su propio
+    // tamaño y no se miden por ancho: su contenido son bloques, no una
+    // sola línea de texto.
+    if (el.querySelector('div')) return;
+    ajustaKpiFont(el);
+  });
+}
+
+function renderKPIs() {
+  const d = filtered;
+  const esMadera = r => true;  // todo el archivo es madera
+  const esFlete  = r => false;
+
+  // ── IDENTIDAD CONTABLE ──
+  // Cada guía es madera propia. El Excel trae:
+  //   NETO MADERA = COSTO UNIT REAL × CANTIDAD   (valor de la madera)
+  //   BONOS       = bonificación por unidad
+  //   NETO2       = NETO MADERA + (BONOS × CANTIDAD)   ← el neto total real
+  // El campo NETO original es solo la tarifa de flete de Laudus y NO se usa
+  // como neto total. Al cargar, NETO ya viene reemplazado por NETO2.
+  const netoTotal  = d.reduce((s,r)=>s+(r.NETO||0),0);              // = NETO2
+  const netoMadera = d.reduce((s,r)=>s+(r['NETO MADERA']||0),0);
+  const montoBonosTotal = d.reduce((s,r)=>s+((r.BONOS||0)*(r.CANTIDAD||0)),0);
+  const netoFlete  = 0;
+  const netoOtros  = 0;
+
+  const volM3 = d.filter(esM3).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+  const volMR = d.filter(esMR).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+  const guiasM3 = d.filter(esM3).length;
+  const guiasMR = d.filter(esMR).length;
+
+  document.getElementById('kpi-neto').textContent  = fmtCLP(netoTotal);
+  document.getElementById('kpi-neto-sub').innerHTML = d.length + ' guías · madera + bonos';
+  document.getElementById('kpi-neto-madera').textContent = fmtCLP(netoMadera);
+  document.getElementById('kpi-neto-madera-sub').textContent = 'neto sin bonos';
+  document.getElementById('kpi-vol').textContent   = fmtNum(volM3,2);
+  document.getElementById('kpi-vol-sub').textContent = guiasM3 + ' guías';
+  document.getElementById('kpi-mr').textContent    = fmtNum(volMR,2);
+  document.getElementById('kpi-mr-sub').textContent = guiasMR + ' guías';
+  document.getElementById('kpi-madera').textContent = d.reduce((s,r) => { s.add(r.PROVEEDOR2); return s; }, new Set()).size;
+  document.getElementById('kpi-madera-sub').textContent = 'proveedores únicos';
+  document.getElementById('kpi-flete').textContent  = d.reduce((s,r) => { s.add(r['CENTRO COSTO']); return s; }, new Set()).size;
+  document.getElementById('kpi-flete-sub').textContent = 'faenas activas';
+  document.getElementById('kpi-bonos').textContent = fmtCLP(montoBonosTotal);
+  document.getElementById('kpi-bonos-sub').textContent = 'total bonificación';
+
+  const elNF = document.getElementById('kpi-neto-flete');
+  if (elNF) {
+    const card = elNF.closest('.kpi');
+    if (card) card.style.display = 'none';   // no aplica: todo es madera
+  }
+
+  // Control de cuadratura: NETO MADERA + BONOS = NETO TOTAL
+  const elChk = document.getElementById('kpi-cuadratura');
+  if (elChk) {
+    if (d.length === 0) {
+      elChk.style.display = 'none';
+    } else {
+      elChk.style.display = 'block';
+      const dif = netoTotal - (netoMadera + montoBonosTotal);
+      // Tolerancia: los decimales de BONOS producen diferencias de unos pocos pesos
+      if (Math.abs(dif) <= Math.max(10, d.length * 0.01)) {
+        elChk.innerHTML = '&#10003; Cuadra: neto madera ' + fmtCLP(netoMadera) +
+          ' + bonos ' + fmtCLP(montoBonosTotal) + ' = ' + fmtCLP(netoTotal) +
+          (Math.abs(dif) >= 1 ? ' <span style="opacity:.6">(dif. ' + fmtCLP(dif) + ' por redondeo)</span>' : '');
+        elChk.style.color = 'var(--madera)';
+      } else {
+        elChk.innerHTML = '&#9888; Descuadre de ' + fmtCLP(dif) +
+          ' — neto madera + bonos no coincide con el neto total';
+        elChk.style.color = 'var(--red)';
+      }
+    }
+  }
+
+  // ── PRECIO UNITARIO PROMEDIO POR ESPECIE × UNIDAD ──
+  // Todas las guías son madera (el "flete" de Laudus también es madera propia).
+  // Se usa NETO MADERA (= COSTO UNIT REAL × cantidad), que es el valor real de
+  // la madera. No se usa el NETO original, que es la tarifa de flete.
+  const soloMadera = d;
+  const grupos = {};
+  soloMadera.forEach(r => {
+    const esp = especieDe(r);
+    const um  = esM3(r) ? 'm³' : 'MR';
+    const k   = esp + '|' + um;
+    if (!grupos[k]) grupos[k] = { esp, um, neto: 0, cant: 0, guias: 0 };
+    grupos[k].neto += (r['NETO MADERA'] || 0);
+    grupos[k].cant += (r.CANTIDAD || 0);
+    grupos[k].guias++;
+  });
+
+  const orden = { 'Eucalyptus': 0, 'Pino': 1, 'Otros': 2 };
+  const celdas = Object.values(grupos)
+    .filter(g => g.cant > 0)
+    .sort((a,b) => (orden[a.esp] - orden[b.esp]) || (a.um < b.um ? -1 : 1));
+
+  const grid = document.getElementById('precio-grid');
+  if (celdas.length === 0) {
+    grid.innerHTML = '<div class="precio-vacio">Sin registros de madera para este filtro</div>';
+  } else {
+    grid.innerHTML = celdas.map(g => {
+      const precio = g.neto / g.cant;
+      return `<div class="precio-cell ${ESPECIE_CLASE[g.esp] || 'otro'}">
+        <div class="precio-esp"><span>${g.esp}</span><span class="um">${g.um}</span></div>
+        <div class="precio-val">${fmtCLP(precio)}</div>
+        <div class="precio-meta">${fmtNum(g.cant,1)} ${g.um} · ${g.guias} guías</div>
+      </div>`;
+    }).join('');
+  }
+
+  const volMaderaTot = soloMadera.reduce((s,r)=>s+(r.CANTIDAD||0),0);
+  const netoMaderaTot = soloMadera.reduce((s,r)=>s+(r['NETO MADERA']||0),0);
+  const promGlobal = volMaderaTot > 0 ? netoMaderaTot / volMaderaTot : 0;
+  document.getElementById('kpi-prom-sub').innerHTML =
+    celdas.length
+      ? `Global: <b>${fmtCLP(promGlobal)}</b> · ponderado por volumen · valor madera sin bonos`
+      : 'ponderado por volumen · valor madera sin bonos';
+
+  // ── PROMEDIO DIARIO CON RECEPCIONES EFECTIVAS ──
+  // Un "día efectivo" es un día en que realmente hubo recepción de esa unidad
+  // (cantidad > 0). Los días sin movimiento NO diluyen el promedio.
+  const diasM3 = new Set();
+  const diasMR = new Set();
+  d.forEach(r => {
+    const dia = r.FECHA_STR;
+    const cant = r.CANTIDAD || 0;
+    if (!dia || cant <= 0) return;
+    if (esM3(r)) diasM3.add(dia); else diasMR.add(dia);
+  });
+  const promDiaM3 = diasM3.size > 0 ? volM3 / diasM3.size : 0;
+  const promDiaMR = diasMR.size > 0 ? volMR / diasMR.size : 0;
+  const diasTotales = new Set([...diasM3, ...diasMR]).size;
+
+  const elPD    = document.getElementById('kpi-prom-dia');
+  const elPDsub = document.getElementById('kpi-prom-dia-sub');
+  const partes = [];
+  if (diasM3.size) partes.push(fmtNum(promDiaM3, 2) + ' m³/día');
+  if (diasMR.size) partes.push(fmtNum(promDiaMR, 2) + ' MR/día');
+  elPD.innerHTML = partes.length
+    ? partes.map(p => `<div style="line-height:1.25;">${p}</div>`).join('')
+    : '0';
+  elPD.style.fontSize = partes.length > 1 ? '1.25rem' : '';
+  elPDsub.innerHTML = diasTotales
+    ? `<b>${diasTotales}</b> días con recepción efectiva`
+    : 'sin recepciones';
+
+  document.getElementById('filteredCount').textContent = d.length;
+
+  // Los valores ya están en el DOM: ahora se mide cuáles desbordan.
+  // requestAnimationFrame asegura que el navegador ya calculó el layout.
+  requestAnimationFrame(ajustaTodosLosKpis);
+}
+
+function setUnitFilter(val) {
+  unitFilter = val;
+  ['all','m3','mr'].forEach(t => document.getElementById('tab-'+t).classList.remove('active'));
+  document.getElementById('tab-' + (val||'all')).classList.add('active');
+  const labels = { '': 'Cantidad', 'm3': 'm³', 'mr': 'MR' };
+  document.getElementById('th-cantidad').textContent = labels[val];
+  page = 1;
+  renderTable();
+}
+
+// ── TABLE ──
+function getTableRows() {
+  let rows = filtered;
+  if (unitFilter === 'm3') rows = rows.filter(r => r.UM === 'm3');
+  if (unitFilter === 'mr') rows = rows.filter(r => r.UM !== 'm3');
+  if (tableSearch) {
+    const s = tableSearch;
+    rows = rows.filter(r =>
+      (r.PROVEEDOR2||'').toLowerCase().includes(s) ||
+      (r.PATENTE||''). toLowerCase().includes(s) ||
+      (r['CENTRO COSTO']||''). toLowerCase().includes(s) ||
+      String(r.NÚMERO||''). toLowerCase().includes(s) ||
+      (r.BODEGA||''). toLowerCase().includes(s)
+    );
+  }
+  rows = [...rows].sort((a,b) => {
+    const av = a[sortKey]||0, bv = b[sortKey]||0;
+    return av < bv ? -sortDir : av > bv ? sortDir : 0;
+  });
+  return rows;
+}
+
+function renderTable() {
+  const rows = getTableRows();
+  const total = rows.length;
+  const pages = Math.max(1, Math.ceil(total/PAGE_SIZE));
+  if (page > pages) page = pages;
+
+  const slice = rows.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = slice.map(r => `
+    <tr>
+      <td class="num">${r.NÚMERO||''}</td>
+      <td>${(r.FECHA_STR||'').split('-').reverse().join('/')}</td>
+      <td><span class="badge ${(r.PLANTA||'')=='CMPC'?'cmpc':'arauco'}">${r.PLANTA||'—'}</span></td>
+      <td>${r.BODEGA||''}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;" title="${r.PROVEEDOR2||''}">${(r.PROVEEDOR2||'').length>28?(r.PROVEEDOR2||'').slice(0,28)+'…':r.PROVEEDOR2||''}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:0.72rem">${r.PATENTE||''}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="${r.DESCRIPCIÓN||''}">${(r.DESCRIPCIÓN||'').length>28?(r.DESCRIPCIÓN||'').slice(0,28)+'…':r.DESCRIPCIÓN||''}</td>
+      <td class="num">${fmtNum(r.CANTIDAD,2)}</td>
+      <td class="num">${fmtCLP(r['COSTO UNITARIO']||0)}</td>
+      <td class="num" style="color:var(--amber)">${fmtCLP(r.BONOS||0)}</td>
+      <td class="num" style="color:var(--accent)">${fmtCLP(r.NETO||0)}</td>
+    </tr>
+  `).join('');
+
+  // ── SUBTOTAL DE PÁGINA Y TOTAL GENERAL ──
+  // El subtotal cubre solo las filas visibles; el total general, todas las
+  // filas que pasan los filtros y la búsqueda (no solo la página actual).
+  const sum = (arr, f) => arr.reduce((s,r) => s + (f(r)||0), 0);
+  const cantPag = sum(slice, r => r.CANTIDAD);
+  const netoPag = sum(slice, r => r.NETO);
+  const cantTot = sum(rows,  r => r.CANTIDAD);
+  const netoTot = sum(rows,  r => r.NETO);
+
+  // La cantidad mezcla m³ y MR: sumarlas sin distinguir daría un número sin
+  // sentido, así que se desglosa por unidad.
+  const uni = (arr) => {
+    const m3 = arr.filter(esM3).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+    const mr = arr.filter(esMR).reduce((s,r)=>s+(r.CANTIDAD||0),0);
+    const p = [];
+    if (m3 > 0) p.push(fmtNum(m3,2) + ' m³');
+    if (mr > 0) p.push(fmtNum(mr,2) + ' MR');
+    return p.length ? p.join('<br>') : fmtNum(0,2);
+  };
+
+  const tfoot = document.getElementById('tableFoot');
+  if (tfoot) {
+    tfoot.innerHTML = `
+      <tr class="tf-sub">
+        <td colspan="7">Subtotal página ${page} <span class="tf-n">${slice.length} guías</span></td>
+        <td class="num">${uni(slice)}</td>
+        <td></td>
+        <td></td>
+        <td class="num">${fmtCLP(netoPag)}</td>
+      </tr>
+      <tr class="tf-tot">
+        <td colspan="7">TOTAL GENERAL <span class="tf-n">${total} guías${filtroActivo() || tableSearch ? ' · filtrado' : ''}</span></td>
+        <td class="num">${uni(rows)}</td>
+        <td></td>
+        <td></td>
+        <td class="num">${fmtCLP(netoTot)}</td>
+      </tr>`;
+  }
+
+  document.getElementById('pag-info').textContent = `Página ${page} de ${pages} (${total} filas)`;
+
+  // Page buttons
+  const pagNums = document.getElementById('pagNums');
+  pagNums.innerHTML = '';
+  const range = [];
+  for (let i = Math.max(1,page-2); i <= Math.min(pages, page+2); i++) range.push(i);
+  range.forEach(p => {
+    const b = document.createElement('button');
+    b.className = 'pag-btn' + (p===page?' active':'');
+    b.textContent = p;
+    b.onclick = () => { page=p; renderTable(); };
+    pagNums.appendChild(b);
+  });
+  document.getElementById('btnPrev').disabled = page <= 1;
+  document.getElementById('btnNext').disabled = page >= pages;
+}
+
+function changePage(delta) { page += delta; renderTable(); }
+
+function sortTable(key) {
+  if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = -1; }
+  renderTable();
+}
+
+// ── MAIN RENDER ──
+function render() {
+  renderKPIs();
+  renderCharts();
+  renderTable();
+  document.getElementById('periodBadge').textContent = inferPeriod(filtered);
+
+  // Aviso cuando la base está vacía (aún no hay guías en Firestore)
+  let aviso = document.getElementById('emptyState');
+  if (allData.length === 0) {
+    if (!aviso) {
+      aviso = document.createElement('div');
+      aviso.id = 'emptyState';
+      aviso.style.cssText = 'margin:1rem 0;padding:1.25rem;background:var(--surface);border:1px dashed var(--border);border-radius:var(--r);text-align:center;color:var(--muted);font-size:0.85rem;line-height:1.6;';
+      aviso.innerHTML = 'No hay guías cargadas todavía.<br>Usa <b style="color:var(--text);">Actualizar Excel</b> para subir tu primer archivo. Los datos quedarán guardados en Firebase.';
+      const cuad = document.getElementById('kpi-cuadratura');
+      cuad.parentNode.insertBefore(aviso, cuad.nextSibling);
+    }
+    aviso.style.display = 'block';
+  } else if (aviso) {
+    aviso.style.display = 'none';
+  }
+}
+
+// ── FILE UPLOAD ──
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const wb = XLSX.read(ev.target.result, {type:'array', cellDates:true, cellNF:false, cellText:false});
+      const wsName = wb.SheetNames.find(n => n.toUpperCase() === 'GUIAS') || wb.SheetNames[0];
+      const ws = wb.Sheets[wsName];
+      const raw = XLSX.utils.sheet_to_json(ws, {raw:false, dateNF:'yyyy-mm-dd', defval:''});
+
+      // Convierte cualquier valor de fecha a 'yyyy-mm-dd' de forma segura
+      const toFechaStr = v => {
+        if (!v) return '';
+        // Objeto Date de JS (cellDates:true)
+        if (v instanceof Date) {
+          const y = v.getFullYear();
+          const m = String(v.getMonth()+1).padStart(2,'0');
+          const d = String(v.getDate()).padStart(2,'0');
+          return `${y}-${m}-${d}`;
+        }
+        const s = String(v).trim();
+        // Formato dd/mm/yyyy o dd-mm-yyyy
+        if (/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(s)) {
+          const p = s.replace(/-/g,'/').split('/');
+          return `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+        }
+        // Ya en formato yyyy-mm-dd
+        return s.slice(0,10);
+      };
+
+      // Función auxiliar: busca clave con o sin espacio al final
+      const g = (r, ...keys) => {
+        for (const k of keys) {
+          const v = r[k] !== undefined ? r[k] : r[k.trim()] !== undefined ? r[k.trim()] : r[k+' '];
+          if (v !== undefined && v !== null && v !== '') return v;
+        }
+        return '';
+      };
+
+      const nuevos = raw.map(r => {
+        const fechaStr = toFechaStr(g(r,'FECHA','Fecha'));
+        const umRaw = (g(r,'UM','Um','um')||'').toString().trim().toUpperCase();
+        const um = umRaw === 'M3' ? 'm3'
+                 : umRaw === 'MR' ? 'mr'
+                 : (String(g(r,'DESCRIPCIÓN','Descripcion','DESCRIPCION')).startsWith('MR') ? 'mr' : 'm3');
+
+        // NETO: usar NETO2 si existe y es distinto de 0, sino NETO original
+        const neto2  = parseFloat(g(r,'NETO2','neto2')) || 0;
+        const neto   = parseInt(g(r,'NETO','Neto'))     || 0;
+        const netoFinal = (neto2 !== 0) ? neto2 : neto;
+
+        // COSTO UNITARIO: usar C.UNIT si existe y es distinto de 0, sino COSTO UNITARIO original
+        const cunit  = parseFloat(g(r,'C.UNIT','c.unit')) || 0;
+        const cu     = parseFloat(g(r,'COSTO UNITARIO','Costo Unitario')) || 0;
+        const cuFinal = (cunit !== 0) ? cunit : cu;
+
+        // TIPO: todo el archivo es MADERA. Las líneas marcadas como FLETE en
+        // Laudus corresponden a madera propia de Forestal La Cabaña despachada
+        // a planta; el flete es solo el concepto de facturación, no otro producto.
+        const tipo = 'MADERA';
+
+        return {
+          'NÚMERO':         parseInt(g(r,'NÚMERO','NUMERO')) || 0,
+          'FECHA_STR':      fechaStr,
+          'PROVEEDOR':      String(g(r,'PROVEEDOR2','PROVEEDOR','Proveedor')),
+          'TIPO':           tipo,
+          'CONCEPTO':       String(g(r,'CONCEPTO','Concepto')),
+          'PRODUCTO':       String(g(r,'PRODUCTO2','PRODUCTO','Producto') || g(r,'PRODUCTO','Producto')),
+          'DESCRIPCIÓN':    String(g(r,'DESCRIPCIÓN','Descripcion','DESCRIPCION')),
+          'UM':             um,
+          'CANTIDAD':       parseFloat(g(r,'CANTIDAD')) || 0,
+          'COSTO UNITARIO': cuFinal,
+          'NETO':           netoFinal,
+          'CENTRO COSTO':   String(g(r,'CENTRO COSTO','Centro Costo')),
+          'BODEGA':         String(g(r,'BODEGA','Bodega')),
+          'PATENTE':        String(g(r,'PATENTE ','PATENTE','Patente')),
+          'TRANSPORTISTA':  parseFloat(g(r,'TRANSPORTISTA ','TRANSPORTISTA')) || 0,
+          'PLANTA':         String(g(r,'PLANTA','Planta')),
+          'PROVEEDOR2':     String(g(r,'PROVEEDOR2')),
+          'BONOS':          parseFloat(g(r,'BONOS','Bonos')) || 0,
+          'NETO MADERA':    parseFloat(g(r,'NETO MADERA','Neto Madera')) || 0,
+          'COSTO UNITARIO REAL': parseFloat(g(r,'COSTO UNIT REAL','Costo Unit Real')) || 0,
+          'NETO2':          parseFloat(g(r,'NETO2','neto2')) || 0,
+        };
+      }).filter(r => r.NETO !== 0 || r.CANTIDAD !== 0);
+
+      if (nuevos.length === 0) {
+        alert('No se encontraron registros válidos en la hoja GUIAS.');
+        return;
+      }
+
+      // ══════════════════════════════════════════════════════════
+      //  MERGE INCREMENTAL CON DETECCIÓN DE CAMBIOS
+      //  Cada guía del Excel se clasifica en:
+      //   · NUEVA      → no existía → se agrega
+      //   · MODIFICADA → ya existía pero algún dato cambió → se actualiza
+      //   · IGUAL      → ya existía sin cambios → se ignora
+      //  Solo las nuevas y las modificadas se escriben en Firebase, así
+      //  no se re-sube toda la base en cada carga.
+      // ══════════════════════════════════════════════════════════
+      const indice = new Map();                 // rowKey -> {row, pos en allData}
+      allData.forEach((r, i) => indice.set(rowKey(r), { row: r, pos: i }));
+
+      let agregados = 0, modificados = 0, iguales = 0;
+      const nuevosUnicos = [];                  // guías nuevas a insertar
+      const actualizados = [];                  // guías existentes con cambios
+      const vistosEnArchivo = new Set();        // evita duplicados dentro del propio Excel
+
+      nuevos.forEach(r => {
+        const k = rowKey(r);
+        if (vistosEnArchivo.has(k)) return;     // repetida en el mismo archivo
+        vistosEnArchivo.add(k);
+
+        const prev = indice.get(k);
+        if (!prev) {
+          nuevosUnicos.push(r);
+          agregados++;
+        } else if (contentHash(prev.row) !== contentHash(r)) {
+          // Misma guía, contenido distinto: se reemplaza en su posición
+          allData[prev.pos] = r;
+          actualizados.push(r);
+          modificados++;
+        } else {
+          iguales++;
+        }
+      });
+
+      if (agregados === 0 && modificados === 0) {
+        alert(`Sin cambios: las ${nuevos.length} filas del archivo ya estaban cargadas, idénticas.`);
+        this && (this.value = '');
+        return;
+      }
+
+      if (nuevosUnicos.length) allData = allData.concat(nuevosUnicos);
+      // Orden estable por fecha desc para consistencia visual
+      allData.sort((a,b) => (a.FECHA_STR||'') < (b.FECHA_STR||'') ? 1 : (a.FECHA_STR||'') > (b.FECHA_STR||'') ? -1 : 0);
+
+      filtered = [...allData];
+      FILTRO_IDS.forEach(id => seleccion[id].clear());
+      populateFilters(allData);
+      page = 1;
+      render();
+
+      alert(
+        `Carga completada:\n` +
+        `• ${agregados} guías nuevas\n` +
+        `• ${modificados} guías actualizadas (había cambios)\n` +
+        `• ${iguales} sin cambios (omitidas)\n` +
+        `• Total en base: ${allData.length} guías`
+      );
+
+      // Persistir en Firebase: solo lo nuevo y lo modificado.
+      if (window.FB_ENABLED) {
+        const aSincronizar = nuevosUnicos.concat(actualizados);
+        guardarEnFirebase(aSincronizar)
+          .then(n => console.log(`Firebase: ${n} guías sincronizadas (${agregados} nuevas, ${modificados} actualizadas).`))
+          .catch(e => { console.error('Firebase error:', e); alert('Aviso: los datos se cargaron localmente, pero falló la sincronización con Firebase:\n' + e.message); });
+      }
+    } catch(err) {
+      alert('Error al leer el archivo: ' + err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  this.value = '';
+});
+
+// ── DESCARGAR DASHBOARD ──
+function descargarDashboard() {
+  // Obtener el HTML actual completo de la página
+  const html = document.documentElement.outerHTML;
+
+  // Inyectar los datos actuales (allData) en el HTML para que el archivo
+  // descargado ya tenga los datos embebidos y no necesite el Excel
+  const marker = 'const EMBEDDED_DATA = ';
+  const dataJson = JSON.stringify(allData);
+  let htmlFinal = html;
+
+  // Reemplazar EMBEDDED_DATA con los datos actuales
+  const start = htmlFinal.indexOf(marker);
+  if (start !== -1) {
+    const end = htmlFinal.indexOf(';', start + marker.length);
+    if (end !== -1) {
+      htmlFinal = htmlFinal.slice(0, start) + marker + dataJson + htmlFinal.slice(end);
+    }
+  }
+
+  // Nombre del archivo con el período actual
+  const periodo = document.getElementById('periodBadge').textContent.trim().replace(/\s+/g,'-') || 'dashboard';
+  const nombre = `Informe_Maderas_${periodo}.html`;
+
+  // Descargar
+  const blob = new Blob([htmlFinal], {type: 'text/html;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = nombre;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── IMPRIMIR REPORTE ──
+function printReport() {
+  window.print();
+}
+
+// ── SELECTOR DE TEMA ──
+document.getElementById('themeSelect').addEventListener('change', e => applyTheme(e.target.value));
+
+// ── HOOKS FIREBASE (definidos en el módulo firebase de abajo) ──
+// Placeholders para que el resto del código no falle si Firebase no está listo.
+window.FB_ENABLED = window.FB_ENABLED || false;
+window.guardarEnFirebase = window.guardarEnFirebase || (async () => 0);
+window.cargarDesdeFirebase = window.cargarDesdeFirebase || (async () => []);
+window.reconstruirFirebase = window.reconstruirFirebase || (async () => ({ borrados: 0, escritas: 0 }));
+
+// ── INIT ──
+(function initTheme(){
+  let saved = '';
+  try { saved = localStorage.getItem('informe_theme') || ''; } catch(e){}
+  currentTheme = saved;
+  if (saved) document.documentElement.setAttribute('data-theme', saved);
+  document.getElementById('themeSelect').value = saved;
+})();
+populateFilters(allData);
+render();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     INTEGRACIÓN FIREBASE (Firestore)
+     ───────────────────────────────────────────────────────────────────
+     1) Pega tu configuración en FIREBASE_CONFIG (Consola Firebase →
+        Configuración del proyecto → Tus apps → SDK setup → Config).
+     2) Al abrir el informe, se cargará la base desde Firestore.
+     3) Al subir un Excel, solo las guías NUEVAS (sin duplicar) se
+        escriben en Firestore, cada una con un ID único = huella de la guía.
+     Si dejas FIREBASE_CONFIG con los valores "TU_...", la app funciona
+     igual pero SOLO en modo local (sin sincronizar).
+     ═══════════════════════════════════════════════════════════════════ -->
+<!-- ═══════════════ OVERLAY DE LOGIN (Firebase Auth) ═══════════════ -->
+<div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(9,12,17,0.92);backdrop-filter:blur(4px);align-items:center;justify-content:center;">
+  <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:2rem 2rem 1.75rem;width:340px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,0.5);font-family:'Sora',sans-serif;color:#e6edf3;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;">
+      <div style="width:34px;height:34px;background:linear-gradient(135deg,#2ea043,#1a7432);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;">LC</div>
+      <div style="font-size:0.95rem;font-weight:600;line-height:1.2;">Informe de Maderas<br><span style="font-size:0.72rem;color:#7d8590;font-weight:400;">Acceso restringido</span></div>
+    </div>
+    <label style="display:block;font-size:0.7rem;color:#7d8590;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:4px;">Correo</label>
+    <input id="loginEmail" type="email" autocomplete="username" placeholder="tu@correo.cl"
+      style="width:100%;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:9px 11px;font-family:'Sora',sans-serif;font-size:0.85rem;margin-bottom:0.9rem;">
+    <label style="display:block;font-size:0.7rem;color:#7d8590;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:4px;">Contraseña</label>
+    <input id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••"
+      style="width:100%;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:9px 11px;font-family:'Sora',sans-serif;font-size:0.85rem;margin-bottom:1.1rem;">
+    <button id="loginBtn"
+      style="width:100%;background:#2ea043;border:1px solid #1a7432;border-radius:8px;color:#fff;padding:10px;font-family:'Sora',sans-serif;font-size:0.85rem;font-weight:600;cursor:pointer;transition:background 0.2s;">Ingresar</button>
+    <div id="loginError" style="display:none;color:#f85149;font-size:0.75rem;margin-top:0.85rem;text-align:center;"></div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import {
+    getFirestore, collection, doc, setDoc, getDocs, writeBatch,
+    deleteDoc, query, limit,
+    initializeFirestore, persistentLocalCache, persistentMultipleTabManager
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import {
+    getAuth, onAuthStateChanged, signInWithEmailAndPassword,
+    signOut, setPersistence, browserLocalPersistence
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+  // ▼▼▼ PEGA AQUÍ TU CONFIGURACIÓN DE FIREBASE ▼▼▼
+  const FIREBASE_CONFIG = {
+    apiKey:            "AIzaSyC6R3y7KjJKYzHKELKPuUCNtQesK_2Dj84",
+    authDomain:        "informes-1382e.firebaseapp.com",
+    projectId:         "informes-1382e",
+    storageBucket:     "informes-1382e.firebasestorage.app",
+    messagingSenderId: "855248413328",
+    appId:             "1:855248413328:web:33ddd9d58101c2556fee15"
+  };
+  // ▲▲▲ FIN CONFIGURACIÓN ▲▲▲
+
+  const COLECCION = "guias_maderas"; // nombre de la colección en Firestore
+
+  const configurado = FIREBASE_CONFIG.projectId && !FIREBASE_CONFIG.projectId.startsWith("TU_");
+
+  const overlay   = document.getElementById('loginOverlay');
+  const emailEl   = document.getElementById('loginEmail');
+  const passEl    = document.getElementById('loginPass');
+  const loginBtn  = document.getElementById('loginBtn');
+  const errEl     = document.getElementById('loginError');
+
+  function showError(msg) { errEl.textContent = msg; errEl.style.display = 'block'; }
+  function clearError()   { errEl.textContent = '';  errEl.style.display = 'none'; }
+
+  if (!configurado) {
+    console.warn("Firebase NO configurado: la app funciona en modo local sin login.");
+    window.FB_ENABLED = false;
+  } else {
+    try {
+      const app  = initializeApp(FIREBASE_CONFIG);
+      // Firestore con caché persistente (IndexedDB): las guías quedan
+      // guardadas en el dispositivo. Sin esto la app abriría sin señal
+      // pero mostraría el informe vacío.
+      // persistentMultipleTabManager permite tener varias pestañas abiertas
+      // sin que se peleen por el bloqueo de la caché.
+      let db;
+      try {
+        db = initializeFirestore(app, {
+          localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+        });
+      } catch (e) {
+        // Si el navegador no soporta IndexedDB (modo incógnito estricto,
+        // por ejemplo), se cae a la versión en memoria: la app funciona,
+        // pero sin datos offline.
+        console.warn('Sin persistencia offline:', e);
+        db = getFirestore(app);
+      }
+      const auth = getAuth(app);
+      window.FB_ENABLED = true;
+
+      // Mantener la sesión iniciada entre recargas
+      setPersistence(auth, browserLocalPersistence).catch(e => console.warn('Persistencia auth:', e));
+
+      // ── FUNCIONES FIRESTORE ──
+      window.guardarEnFirebase = async (filas) => {
+        if (!filas || !filas.length) return 0;
+        if (!auth.currentUser) throw new Error('Sesión no iniciada.');
+        let escritas = 0;
+        for (let i = 0; i < filas.length; i += 450) {
+          const lote = filas.slice(i, i + 450);
+          const batch = writeBatch(db);
+          lote.forEach(r => {
+            const id = rowDocId(r);
+            batch.set(doc(db, COLECCION, id), { ...r, _key: rowKey(r) });
+          });
+          await batch.commit();
+          escritas += lote.length;
+        }
+        return escritas;
+      };
+
+      // Reconstruye la colección: borra TODOS los documentos y regraba
+      // allData con los IDs actuales. Migra los IDs cuando cambia el
+      // criterio de identidad (huella), eliminando duplicados huérfanos.
+      window.reconstruirFirebase = async () => {
+        if (!auth.currentUser) throw new Error('Sesión no iniciada.');
+        let borrados = 0;
+        while (true) {
+          const snap = await getDocs(query(collection(db, COLECCION), limit(400)));
+          if (snap.empty) break;
+          const batch = writeBatch(db);
+          snap.forEach(d => batch.delete(d.ref));
+          await batch.commit();
+          borrados += snap.size;
+          if (snap.size < 400) break;
+        }
+        const escritas = await window.guardarEnFirebase(allData);
+        return { borrados, escritas };
+      };
+
+      window.cargarDesdeFirebase = async () => {
+        const snap = await getDocs(collection(db, COLECCION));
+        const rows = [];
+        snap.forEach(d => { const o = d.data(); delete o._key; rows.push(o); });
+        return rows;
+      };
+
+      // ── SINCRONIZACIÓN INICIAL (sólo tras login) ──
+      let yaSincronizado = false;
+      async function sincronizarConFirestore() {
+        if (yaSincronizado) return;
+        yaSincronizado = true;
+        try {
+          const remotos = await window.cargarDesdeFirebase();
+          if (remotos.length) {
+            const vistos = new Set(allData.map(rowKey));
+            remotos.forEach(r => { const k = rowKey(r); if (!vistos.has(k)) { vistos.add(k); allData.push(r); } });
+            allData.sort((a,b) => (a.FECHA_STR||'') < (b.FECHA_STR||'') ? 1 : (a.FECHA_STR||'') > (b.FECHA_STR||'') ? -1 : 0);
+            filtered = [...allData];
+            populateFilters(allData);
+            page = 1;
+            render();
+            console.log(`Firebase: ${remotos.length} guías cargadas desde Firestore.`);
+          }
+        } catch (e) {
+          console.error("No se pudo cargar desde Firestore:", e);
+        }
+      }
+
+      // ── CONTROL DE SESIÓN ──
+      onAuthStateChanged(auth, (user) => {
+        if (user) {
+          overlay.style.display = 'none';
+          clearError();
+          // Botón cerrar sesión en el topbar
+          if (!document.getElementById('logoutBtn')) {
+            const cont = document.querySelector('.topbar > div:last-child');
+            if (cont) {
+              const b = document.createElement('button');
+              b.id = 'logoutBtn';
+              b.className = 'upload-btn';
+              b.title = 'Cerrar sesión (' + (user.email||'') + ')';
+              b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Salir';
+              b.onclick = () => signOut(auth);
+              cont.appendChild(b);
+            }
+          }
+          sincronizarConFirestore();
+        } else {
+          overlay.style.display = 'flex';
+          const lb = document.getElementById('logoutBtn');
+          if (lb) lb.remove();
+          setTimeout(() => emailEl.focus(), 100);
+        }
+      });
+
+      // ── ACCIÓN DE LOGIN ──
+      async function intentarLogin() {
+        clearError();
+        const email = emailEl.value.trim();
+        const pass  = passEl.value;
+        if (!email || !pass) { showError('Ingresa correo y contraseña.'); return; }
+        loginBtn.disabled = true; loginBtn.textContent = 'Ingresando…';
+        try {
+          await signInWithEmailAndPassword(auth, email, pass);
+          passEl.value = '';
+        } catch (e) {
+          const map = {
+            'auth/invalid-credential': 'Correo o contraseña incorrectos.',
+            'auth/invalid-email':      'El correo no es válido.',
+            'auth/user-not-found':     'No existe una cuenta con ese correo.',
+            'auth/wrong-password':     'Contraseña incorrecta.',
+            'auth/too-many-requests':  'Demasiados intentos. Espera unos minutos.',
+            'auth/network-request-failed': 'Sin conexión con Firebase.'
+          };
+          showError(map[e.code] || ('Error: ' + (e.code || e.message)));
+        } finally {
+          loginBtn.disabled = false; loginBtn.textContent = 'Ingresar';
+        }
+      }
+      loginBtn.addEventListener('click', intentarLogin);
+      passEl.addEventListener('keydown', e => { if (e.key === 'Enter') intentarLogin(); });
+      emailEl.addEventListener('keydown', e => { if (e.key === 'Enter') passEl.focus(); });
+
+    } catch (e) {
+      console.error("Error inicializando Firebase:", e);
+      window.FB_ENABLED = false;
+    }
+  }
+</script>
+
+<!-- ═══════════════ PWA: service worker, offline, instalación ═══════════════ -->
+<style>
+  #netBadge {
+    position: fixed; bottom: 14px; left: 14px; z-index: 950;
+    display: none; align-items: center; gap: 7px;
+    background: #e9730c; color: #fff;
+    padding: 7px 13px; border-radius: 20px;
+    font-family: 'Sora', system-ui, sans-serif; font-size: 0.74rem; font-weight: 600;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+  }
+  #netBadge.show { display: flex; }
+  #netBadge .dot {
+    width: 7px; height: 7px; border-radius: 50%; background: #fff;
+    animation: pulso 1.6s ease-in-out infinite;
+  }
+  @keyframes pulso { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  #btnInstalar {
+    position: fixed; bottom: 14px; right: 14px; z-index: 950;
+    display: none; align-items: center; gap: 7px;
+    background: #0a6ed1; color: #fff; border: none;
+    padding: 10px 16px; border-radius: 22px;
+    font-family: 'Sora', system-ui, sans-serif; font-size: 0.78rem; font-weight: 600;
+    cursor: pointer; box-shadow: 0 8px 22px rgba(10,110,209,0.4);
+  }
+  #btnInstalar.show { display: flex; }
+  #btnInstalar:hover { background: #0854a0; }
+  @media print { #netBadge, #btnInstalar { display: none !important; } }
+</style>
+
+<div id="netBadge"><span class="dot"></span><span>Sin conexión — mostrando datos guardados</span></div>
+<button id="btnInstalar">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+  </svg>
+  Instalar app
+</button>
+
+<script>
+  // ── Registro del service worker ──
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      // updateViaCache:'none' obliga al navegador a revisar sw.js contra el
+      // servidor en vez de servirlo de su caché. Importante en GitHub Pages,
+      // que no permite fijar cabeceras Cache-Control y podría dejar la app
+      // pegada en una versión antigua.
+      navigator.serviceWorker.register('sw.js', { scope: './', updateViaCache: 'none' })
+        .then(reg => {
+          console.log('[PWA] Service worker activo.');
+          reg.update();   // busca versión nueva en cada carga
+
+          reg.addEventListener('updatefound', () => {
+            const nuevo = reg.installing;
+            nuevo && nuevo.addEventListener('statechange', () => {
+              if (nuevo.state === 'installed' && navigator.serviceWorker.controller) {
+                mostrarAvisoActualizacion();
+              }
+            });
+          });
+        })
+        .catch(err => console.warn('[PWA] No se pudo registrar el SW:', err));
+
+      // Cuando el SW nuevo toma el control, se recarga una sola vez
+      let recargando = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (recargando) return;
+        recargando = true;
+        location.reload();
+      });
+    });
+  }
+
+  // Aviso discreto cuando hay una versión nueva publicada
+  function mostrarAvisoActualizacion() {
+    if (document.getElementById('updBar')) return;
+    const bar = document.createElement('div');
+    bar.id = 'updBar';
+    bar.style.cssText = 'position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:960;' +
+      'background:#107e3e;color:#fff;padding:10px 16px;border-radius:22px;display:flex;align-items:center;gap:12px;' +
+      "font-family:'Sora',system-ui,sans-serif;font-size:0.78rem;font-weight:600;box-shadow:0 8px 22px rgba(0,0,0,0.3);";
+    bar.innerHTML = '<span>Hay una versión nueva disponible</span>' +
+      '<button style="background:#fff;color:#107e3e;border:none;border-radius:14px;padding:5px 12px;' +
+      "font-family:'Sora',sans-serif;font-size:0.74rem;font-weight:700;cursor:pointer;\">Actualizar</button>";
+    bar.querySelector('button').onclick = () => {
+      navigator.serviceWorker.getRegistration().then(reg => {
+        if (reg && reg.waiting) reg.waiting.postMessage('skipWaiting');
+        else location.reload();
+      });
+    };
+    document.body.appendChild(bar);
+  }
+
+  // ── Aviso de estado de conexión ──
+  // Firestore sirve los datos desde su caché local, así que el informe
+  // sigue funcionando; solo se avisa que lo mostrado puede no ser lo último.
+  const netBadge = document.getElementById('netBadge');
+  function revisarRed() {
+    netBadge.classList.toggle('show', !navigator.onLine);
+  }
+  window.addEventListener('online',  revisarRed);
+  window.addEventListener('offline', revisarRed);
+  revisarRed();
+
+  // ── Botón de instalación ──
+  // Chrome/Edge/Android disparan este evento cuando la app es instalable.
+  let promptInstalar = null;
+  const btnInstalar = document.getElementById('btnInstalar');
+
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();              // se pospone el diálogo del navegador
+    promptInstalar = e;
+    btnInstalar.classList.add('show');
+  });
+
+  btnInstalar.addEventListener('click', async () => {
+    if (!promptInstalar) return;
+    promptInstalar.prompt();
+    const { outcome } = await promptInstalar.userChoice;
+    console.log('[PWA] Instalación:', outcome);
+    promptInstalar = null;
+    btnInstalar.classList.remove('show');
+  });
+
+  // Ya instalada: el botón no tiene sentido
+  window.addEventListener('appinstalled', () => {
+    btnInstalar.classList.remove('show');
+    promptInstalar = null;
+  });
+  // Si ya se abre en modo app, tampoco se muestra
+  if (window.matchMedia('(display-mode: standalone)').matches) {
+    btnInstalar.classList.remove('show');
+  }
+</script>
+</body>
+</html>
