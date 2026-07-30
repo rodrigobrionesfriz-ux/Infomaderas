@@ -386,6 +386,34 @@ body {
 .kpi-value.fit-2 { font-size: 1.12rem; letter-spacing: -0.02em; }
 .kpi-value.fit-3 { font-size: 1.0rem;  letter-spacing: -0.03em; }
 .kpi-value.fit-4 { font-size: 0.9rem;  letter-spacing: -0.03em; }
+.kpi-value.fit-5 { font-size: 0.8rem;  letter-spacing: -0.04em; }
+.kpi-value.fit-6 { font-size: 0.7rem;  letter-spacing: -0.04em; }
+
+/* ── KPIs EN MÓVIL: siempre 2 por fila, sin cortar valores ── */
+@media (max-width: 640px) {
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));  /* 2 columnas exactas */
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+  }
+  .kpi { padding: 0.75rem 0.7rem; }
+  .kpi-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.3px;
+    margin-bottom: 0.35rem;
+    /* La etiqueta puede usar dos líneas, pero no más, para no crecer de más */
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; line-height: 1.15; min-height: 1.7em;
+  }
+  .kpi-value { font-size: 1.15rem; margin-bottom: 0.15rem; }
+  .kpi-sub { font-size: 0.62rem; }
+}
+/* Pantallas muy angostas (~360px): un punto más de compresión */
+@media (max-width: 380px) {
+  .kpis { gap: 0.5rem; }
+  .kpi { padding: 0.65rem 0.6rem; }
+  .kpi-value { font-size: 1.05rem; }
+}
 .kpi-sub {
   font-size: 0.72rem;
   color: var(--muted);
@@ -2379,9 +2407,10 @@ function renderCharts() {
 // hasta que entre.
 function ajustaKpiFont(el) {
   if (!el) return;
-  el.classList.remove('fit-1','fit-2','fit-3','fit-4');
-  // scrollWidth > clientWidth significa que el texto no cabe
-  const escalones = ['fit-1','fit-2','fit-3','fit-4'];
+  const escalones = ['fit-1','fit-2','fit-3','fit-4','fit-5','fit-6'];
+  el.classList.remove(...escalones);
+  // scrollWidth > clientWidth significa que el texto no cabe. Se baja de
+  // escalón hasta que entre, o hasta agotar los tamaños disponibles.
   for (let i = 0; i < escalones.length; i++) {
     if (el.scrollWidth <= el.clientWidth + 1) return;  // ya cabe
     el.classList.remove(...escalones);
@@ -2541,7 +2570,11 @@ function renderKPIs() {
 
   // Los valores ya están en el DOM: ahora se mide cuáles desbordan.
   // requestAnimationFrame asegura que el navegador ya calculó el layout.
+  // Doble pasada: la primera tras el layout inmediato, la segunda un
+  // instante después, por si el CSS responsive (media queries) reajustó
+  // el ancho de las tarjetas y cambió lo que cabe.
   requestAnimationFrame(ajustaTodosLosKpis);
+  setTimeout(ajustaTodosLosKpis, 60);
 }
 
 function setUnitFilter(val) {
